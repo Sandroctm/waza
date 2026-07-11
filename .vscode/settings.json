@@ -1,0 +1,6 @@
+{
+    "deepseek.apiKey": "123456789",
+    "deepseek.provider": "ollama",
+    "editor.defaultFormatter": "henrikdev.ag-quota",
+    "notebook.defaultFormatter": "henrikdev.ag-quota"
+}

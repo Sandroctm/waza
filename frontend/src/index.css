@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 220 15% 97%;          /* Gris claro refinado */
+    --foreground: 224 40% 10%;          /* Gris casi negro */
+    --card: 0 0% 100%;                  /* Blanco puro */
+    --card-foreground: 224 40% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 40% 10%;
+    --primary: 145 60% 18%;            /* Verde oscuro ECOSEM (#115e3b) */
+    --primary-foreground: 145 60% 98%;
+    --secondary: 145 20% 90%;          /* Gris con tinte verde claro */
+    --secondary-foreground: 145 60% 15%;
+    --muted: 220 10% 93%;               /* Gris suave */
+    --muted-foreground: 220 10% 45%;
+    --accent: 142 70% 36%;             /* Verde vivo acento (#15803d) */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 220 13% 89%;              /* Gris borde sutil */
+    --input: 220 13% 89%;
+    --ring: 145 60% 18%;
+    --radius: 1rem;                     /* Bordes redondeados más premium */
+  }
+
+  .dark {
+    --background: 224 25% 8%;           /* Slate oscuro profundo */
+    --foreground: 210 20% 98%;
+    --card: 224 25% 10%;                 /* Slate card oscuro */
+    --card-foreground: 210 20% 98%;
+    --popover: 224 25% 10%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 142 70% 36%;             /* Verde acento como primario en modo oscuro */
+    --primary-foreground: 210 20% 98%;
+    --secondary: 224 20% 15%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 224 20% 15%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+    --accent: 142 70% 45%;             /* Verde brillante para acentos oscuros */
+    --accent-foreground: 210 20% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 224 20% 15%;
+    --input: 224 20% 15%;
+    --ring: 142 70% 36%;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden;
+  }
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.6);
+}
+
+/* Micro-Animations & Transitions */
+.hover-scale {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+}
+
+.hover-scale:hover {
+  transform: translateY(-2px) scale(1.01);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Signature Canvas Styling */
+.signature-pad {
+  border: 2px dashed rgba(156, 163, 175, 0.4);
+  background-color: rgba(249, 250, 251, 0.8);
+}
+
+.dark .signature-pad {
+  border: 2px dashed rgba(75, 85, 99, 0.5);
+  background-color: rgba(17, 24, 39, 0.8);
+}
+
+/* Leaflet Map overrides for premium dark/light mode */
+.dark .leaflet-tile {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3);
+}
+
+.leaflet-container {
+  border-radius: var(--radius);
+  z-index: 1;
+}
+
+/* Disable transitions/animations during PDF generation to prevent html2canvas freeze */
+.html2pdf-container * {
+  animation: none !important;
+  transition: none !important;
+  transition-property: none !important;
+}
