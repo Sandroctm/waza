@@ -4,7 +4,7 @@ import { Dashboard } from './views/Dashboard';
 import { Equipos } from './views/Equipos';
 import { EquipoDetalle } from './views/EquipoDetalle';
 import { CheckListDigital } from './views/CheckListDigital';
-import { TareoHorometros } from './views/TareoHorometros';
+import { ReporteTonelada } from './views/ReporteTonelada';
 import { Combustibles } from './views/Combustibles';
 import { Mantenimientos } from './views/Mantenimientos';
 import { Vigilancia } from './views/Vigilancia';
@@ -14,6 +14,8 @@ import { Configuracion } from './views/Configuracion';
 import { CentroReportes } from './views/CentroReportes';
 import { Gobernanza } from './views/Gobernanza';
 import { EstructuraOrganica } from './views/EstructuraOrganica';
+import { DriverManagement } from './views/DriverManagement';
+import { Tareos } from './views/Tareos';
 import { ThemeToggle } from './components/ThemeToggle';
 import { signalRService } from './services/signalr';
 import { api } from './services/api';
@@ -28,12 +30,14 @@ type ViewType =
   | 'equipos' 
   | 'equipo-detalle' 
   | 'checklist' 
-  | 'tareo' 
+  | 'reporte-tonelada' 
   | 'combustible' 
+  | 'tareo'
   | 'mantenimiento' 
   | 'vigilancia' 
   | 'ssoma' 
   | 'auditoria' 
+  | 'personal'
   | 'configuracion'
   | 'centro-reportes'
   | 'gobernanza'
@@ -95,7 +99,8 @@ export const App: React.FC = () => {
 
   const handleLoginSuccess = (userData: any) => {
     setUser(userData);
-    setCurrentView(userData.rol === 'Conductor' || userData.rol === 'Vigilancia' ? 'equipos' : 'dashboard');
+    const defaultView = userData.rol === 'Conductor' || userData.rol === 'Vigilancia' ? 'equipos' : 'dashboard';
+    setCurrentView(defaultView as ViewType);
   };
 
   const handleLogout = () => {
@@ -117,8 +122,39 @@ export const App: React.FC = () => {
 
   // Permission checks helper
   const hasPermission = (moduleName: string) => {
-    // Todos los usuarios pueden ver todos los módulos según lo solicitado
-    return true;
+    if (!user) return false;
+    
+    // Main admin has access to everything
+    const isAdmin = user.rol?.toLowerCase() === 'administrador' || 
+                    user.username?.toLowerCase() === 'admin' || 
+                    (typeof user.permisos === 'string' && user.permisos.toLowerCase().includes('admin:all'));
+    if (isAdmin) {
+      return true;
+    }
+
+    // Default modules for users if no specific permissions string was configured
+    const defaultModules = ['dashboard', 'equipos', 'centro-reportes', 'checklist', 'reporte-tonelada', 'combustible', 'tareo', 'mantenimiento'];
+
+    if (!user.permisos) {
+      return defaultModules.includes(moduleName);
+    }
+
+    // Check array or string permissions
+    if (Array.isArray(user.permisos)) {
+      if (user.permisos.length === 0) return defaultModules.includes(moduleName);
+      return user.permisos.some((p: string) => {
+        const item = p.trim().toLowerCase();
+        return item === moduleName.toLowerCase() || item.startsWith(moduleName.toLowerCase() + ':') || item === '*';
+      });
+    }
+
+    if (typeof user.permisos === 'string') {
+      if (user.permisos.trim() === '') return defaultModules.includes(moduleName);
+      const list = user.permisos.split(',').map((p: string) => p.trim().toLowerCase());
+      return list.some((p: string) => p === moduleName.toLowerCase() || p.startsWith(moduleName.toLowerCase() + ':') || p === '*');
+    }
+
+    return defaultModules.includes(moduleName);
   };
 
   const menuItems = [
@@ -126,19 +162,40 @@ export const App: React.FC = () => {
     { id: 'equipos', label: 'Flota Equipos', icon: Truck },
     { id: 'centro-reportes', label: 'Bandeja Reportes', icon: Folder },
     { id: 'checklist', label: 'Checklist Digital', icon: CheckSquare },
-    { id: 'tareo', label: 'Tareo y Horas', icon: Calendar },
+    { id: 'reporte-tonelada', label: 'Reporte Tonelada', icon: Truck },
     { id: 'combustible', label: 'Combustibles', icon: Fuel },
+    { id: 'tareo', label: 'Tareos / Horas', icon: Calendar },
     { id: 'mantenimiento', label: 'Mantenimientos', icon: Wrench },
     { id: 'vigilancia', label: 'Control Garita', icon: Eye },
     { id: 'ssoma', label: 'Portal SSOMA', icon: ShieldAlert },
     { id: 'gobernanza', label: 'Gobernanza', icon: ShieldCheck },
     { id: 'estructura-organica', label: 'Estructura Orgánica', icon: Network },
     { id: 'auditoria', label: 'Auditoría Logs', icon: History },
+    { id: 'personal', label: 'Personal', icon: User },
     { id: 'configuracion', label: 'Configuración', icon: Settings },
   ];
 
+  // Auto-redirect if currentView is not allowed for this user
+  useEffect(() => {
+    if (user) {
+      if (!hasPermission(currentView)) {
+        const firstAllowed = menuItems.find(item => hasPermission(item.id));
+        if (firstAllowed) {
+          setCurrentView(firstAllowed.id as ViewType);
+        }
+      }
+    }
+  }, [user, currentView]);
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden cherry-bg">
+      {/* Nature-inspired background orbs */}
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-pink-300/20 dark:bg-pink-800/10 blur-3xl animate-pulse" style={{animationDuration:'8s'}} />
+        <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] rounded-full bg-sky-300/25 dark:bg-sky-800/10 blur-3xl animate-pulse" style={{animationDuration:'11s',animationDelay:'2s'}} />
+        <div className="absolute -bottom-40 left-1/3 w-[600px] h-[500px] rounded-full bg-emerald-300/20 dark:bg-emerald-900/15 blur-3xl animate-pulse" style={{animationDuration:'9s',animationDelay:'4s'}} />
+        <div className="absolute bottom-10 right-1/4 w-[400px] h-[400px] rounded-full bg-teal-300/15 dark:bg-teal-800/10 blur-3xl animate-pulse" style={{animationDuration:'12s',animationDelay:'1s'}} />
+      </div>
       
       {/* Mobile top navigation */}
       <div className="flex md:hidden items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 relative z-30 shadow-sm">
@@ -309,12 +366,16 @@ export const App: React.FC = () => {
               <CheckListDigital onNavigate={navigateTo} user={user} />
             )}
 
-            {currentView === 'tareo' && (
-              <TareoHorometros onNavigate={navigateTo} user={user} />
+            {currentView === 'reporte-tonelada' && (
+              <ReporteTonelada onNavigate={navigateTo} user={user} />
             )}
 
             {currentView === 'combustible' && (
               <Combustibles />
+            )}
+
+            {currentView === 'tareo' && (
+              <Tareos />
             )}
 
             {currentView === 'mantenimiento' && (
@@ -339,6 +400,10 @@ export const App: React.FC = () => {
 
             {currentView === 'auditoria' && (
               <Auditoria />
+            )}
+
+            {currentView === 'personal' && (
+              <DriverManagement />
             )}
 
             {currentView === 'configuracion' && (

@@ -21,10 +21,14 @@ export const Ssoma: React.FC<SsomaProps> = ({ onNavigate, user }) => {
 
   const fetchData = async () => {
     try {
-      const eqData = await api.getEquipos();
-      const chData = await api.getCheckLists();
+      const rawEq = await api.getEquipos().catch(() => []);
+      const eqData = Array.isArray(rawEq) ? rawEq : [];
+      
+      const rawCh = await api.getCheckLists().catch(() => []);
+      const chData = Array.isArray(rawCh) ? rawCh : [];
+      
       setEquipos(eqData);
-      setChecklists(chData.filter(c => c.tieneFallasCriticas));
+      setChecklists(chData.filter(c => c && c.tieneFallasCriticas));
     } catch (err) {
       console.error('Error fetching SSOMA compliance data:', err);
     } finally {

@@ -22,11 +22,15 @@ export const Mantenimientos: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const eqData = await api.getEquipos();
-      const mLogs = await api.getMantenimientos();
+      const rawEq = await api.getEquipos().catch(() => []);
+      const eqData = Array.isArray(rawEq) ? rawEq : [];
+      
+      const rawMant = await api.getMantenimientos().catch(() => []);
+      const mLogs = Array.isArray(rawMant) ? rawMant : [];
+      
       setEquipos(eqData);
       setLogs(mLogs);
-      if (eqData.length > 0) setPlaca(eqData[0].placa);
+      if (eqData.length > 0) setPlaca(eqData[0].placa || '');
     } catch (err) {
       console.error('Error fetching maintenance data:', err);
     } finally {
@@ -140,19 +144,23 @@ export const Mantenimientos: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold">
             <div>
-              <label className="block text-slate-400 uppercase tracking-wider mb-1">Equipo</label>
-              <select
+              <label className="block text-slate-400 uppercase tracking-wider mb-1">Equipo (Placa)</label>
+              <input
+                type="text"
+                list="mantenimientos-equipos-list"
                 value={placa}
-                onChange={(e) => setPlaca(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-white"
+                onChange={(e) => setPlaca(e.target.value.toUpperCase())}
+                placeholder="Escriba o seleccione placa"
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-white font-bold uppercase"
                 required
-              >
+              />
+              <datalist id="mantenimientos-equipos-list">
                 {equipos.map((eq) => (
                   <option key={eq.placa} value={eq.placa}>
-                    {eq.placa} ({eq.codigoInterno}) - {eq.estado}
+                    {eq.placa} ({eq.codigoInterno} - {eq.tipo}) - {eq.estado}
                   </option>
                 ))}
-              </select>
+              </datalist>
             </div>
 
             <div className="grid grid-cols-2 gap-2">

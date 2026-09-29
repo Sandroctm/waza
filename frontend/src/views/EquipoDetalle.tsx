@@ -4,7 +4,7 @@ import { signalRService } from '../services/signalr';
 import { Equipo, CheckList, Tareo, Horometro, Combustible, Mantenimiento, Documento, GpsData } from '../types';
 import { 
   ArrowLeft, Truck, CheckSquare, Calendar, Fuel, Wrench, FileText, 
-  MapPin, ShieldAlert, BadgeInfo, Layers, User, PlusCircle, AlertCircle, BarChart3 
+  MapPin, ShieldAlert, BadgeInfo, Layers, User, PlusCircle, AlertCircle, BarChart3, Download
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -36,6 +36,13 @@ export const EquipoDetalle: React.FC<EquipoDetalleProps> = ({ placa, onBack, use
   const [releaseReason, setReleaseReason] = useState('');
   const [showBlockForm, setShowBlockForm] = useState(false);
   const [showReleaseForm, setShowReleaseForm] = useState(false);
+
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<Equipo>>({});
+  
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadData, setUploadData] = useState({ nombre: '', tipo: 'SOAT', fechaVencimiento: '', file: null as File | null });
+  const [uploading, setUploading] = useState(false);
 
   // Map references
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -183,6 +190,143 @@ export const EquipoDetalle: React.FC<EquipoDetalleProps> = ({ placa, onBack, use
     }
   };
 
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.updateEquipo(placa, editFormData);
+      setShowEditForm(false);
+      alert('Equipo actualizado exitosamente.');
+      fetchDetails();
+    } catch (err: any) {
+      alert(err.message || 'Error al actualizar equipo.');
+    }
+  };
+
+  const handleUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadData.file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', uploadData.file);
+      fd.append('nombre', uploadData.nombre);
+      fd.append('tipo', uploadData.tipo);
+      if (uploadData.fechaVencimiento) {
+        fd.append('fechaVencimiento', new Date(uploadData.fechaVencimiento).toISOString());
+      }
+      await api.uploadDocumento(placa, fd);
+      setShowUploadModal(false);
+      setUploadData({ nombre: '', tipo: 'SOAT', fechaVencimiento: '', file: null });
+      alert('Documento subido exitosamente.');
+      fetchDetails();
+    } catch (err: any) {
+      alert(err.message || 'Error al subir documento.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (id: number) => {
+    if (window.confirm('¿Está seguro de eliminar este documento?')) {
+      try {
+        await api.deleteDocumento(placa, id);
+        alert('Documento eliminado.');
+        fetchDetails();
+      } catch (err: any) {
+        alert(err.message || 'Error al eliminar documento.');
+      }
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (!data) return;
+    const { equipo } = data;
+    const fecha = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>Ficha Técnica - ${equipo.placa}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; background: #fff; padding: 0; }
+        .header { background: linear-gradient(135deg, #065f46 0%, #10b981 100%); color: white; padding: 32px 40px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .header h1 { font-size: 28px; font-weight: 900; letter-spacing: -1px; }
+        .header .subtitle { font-size: 11px; opacity: 0.8; margin-top: 4px; letter-spacing: 2px; text-transform: uppercase; }
+        .header .badge { background: rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 16px; text-align: center; font-size: 13px; font-weight: bold; }
+        .section { padding: 24px 40px; border-bottom: 1px solid #f1f5f9; }
+        .section-title { font-size: 10px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8; margin-bottom: 16px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+        .field label { font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase; display: block; margin-bottom: 4px; }
+        .field span { font-size: 14px; font-weight: 700; color: #0f172a; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 99px; font-size: 11px; font-weight: 800; background: #d1fae5; color: #065f46; }
+        .status-blocked { background: #fee2e2; color: #991b1b; }
+        .status-mant { background: #fef3c7; color: #92400e; }
+        .photo-box { width: 200px; height: 140px; object-fit: cover; border-radius: 12px; border: 2px solid #e2e8f0; }
+        .footer { background: #f8fafc; padding: 16px 40px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      </style>
+      </head><body>
+      <div class="header">
+        <div>
+          <div class="subtitle">SIGECOSEM &mdash; Sistema de Gestión de Equipos</div>
+          <h1>Ficha Técnica del Equipo</h1>
+          <div style="margin-top:8px;font-size:13px;opacity:0.9">${equipo.marca} ${equipo.modelo} &mdash; ${equipo.placa}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="badge">
+            <div style="font-size:9px;opacity:0.8;margin-bottom:2px">ESTADO ACTUAL</div>
+            <div>${equipo.estado}</div>
+          </div>
+          <div style="margin-top:8px;font-size:10px;opacity:0.7">${fecha}</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Datos de Identificación</div>
+        <div class="grid-3">
+          <div class="field"><label>Placa</label><span>${equipo.placa}</span></div>
+          <div class="field"><label>Código Interno</label><span>${equipo.codigoInterno}</span></div>
+          <div class="field"><label>Tipo</label><span>${equipo.tipo}</span></div>
+          <div class="field"><label>Marca</label><span>${equipo.marca}</span></div>
+          <div class="field"><label>Modelo</label><span>${equipo.modelo}</span></div>
+          <div class="field"><label>Año Fab.</label><span>${equipo.anioFabricacion || 'N/A'}</span></div>
+          <div class="field"><label>Nº Serie</label><span>${equipo.serie || '—'}</span></div>
+          <div class="field"><label>Nº Motor</label><span>${equipo.motor || '—'}</span></div>
+          <div class="field"><label>Nº Chasis</label><span>${equipo.chasis || '—'}</span></div>
+          <div class="field"><label>Color</label><span>${equipo.color || '—'}</span></div>
+          <div class="field"><label>Valor (USD)</label><span>$ ${(equipo.valor || 0).toLocaleString()}</span></div>
+          <div class="field"><label>Proyecto</label><span>${equipo.proyecto?.nombre || 'Sin asignar'}</span></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Documentos y Seguros</div>
+        <div class="grid-3">
+          <div class="field"><label>SOAT Vence</label><span>${equipo.soatVencimiento ? new Date(equipo.soatVencimiento).toLocaleDateString('es-PE') : '—'}</span></div>
+          <div class="field"><label>Rev. Técnica Vence</label><span>${equipo.revisionTecnicaVencimiento ? new Date(equipo.revisionTecnicaVencimiento).toLocaleDateString('es-PE') : '—'}</span></div>
+          <div class="field"><label>Póliza Vence</label><span>${equipo.polizaVencimiento ? new Date(equipo.polizaVencimiento).toLocaleDateString('es-PE') : '—'}</span></div>
+          <div class="field"><label>Seguro</label><span>${equipo.seguro || '—'}</span></div>
+          <div class="field"><label>GPS ID</label><span>${equipo.gpsId || '—'}</span></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Asignación de Personal</div>
+        <div class="grid-2">
+          <div class="field"><label>Supervisor</label><span>${equipo.supervisor ? `${equipo.supervisor.nombre} ${equipo.supervisor.apellido}` : 'Sin asignar'}</span></div>
+          <div class="field"><label>Operador Principal</label><span>${equipo.operador ? `${equipo.operador.nombre} ${equipo.operador.apellido}` : 'Sin asignar'}</span></div>
+        </div>
+      </div>
+      <div class="footer">
+        <span>SIGECOSEM © ${new Date().getFullYear()} &mdash; Documento generado automáticamente</span>
+        <span>Placa: ${equipo.placa} | Generado: ${new Date().toLocaleString('es-PE')}</span>
+      </div>
+      </body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+  };
+
   if (loading || !data) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
@@ -230,35 +374,47 @@ export const EquipoDetalle: React.FC<EquipoDetalleProps> = ({ placa, onBack, use
           </div>
         </div>
 
-        {/* SSOMA actions */}
-        {isSsomaOrAdmin && (
-          <div className="flex items-center gap-3">
-            {equipo.estado === 'Bloqueado por SSOMA' ? (
-              <button 
-                onClick={() => setShowReleaseForm(true)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-xs active:scale-98 transition-all"
-              >
-                Liberar Equipo (SSOMA)
-              </button>
-            ) : (
-              <button 
-                onClick={() => setShowBlockForm(true)}
-                className="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-xs active:scale-98 transition-all"
-              >
-                Bloquear Equipo (SSOMA)
-              </button>
-            )}
-            
-            {user.rol === 'Administrador' && (
-              <button 
-                onClick={handleDelete}
-                className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold py-2.5 px-4 rounded-xl shadow-md text-xs active:scale-98 transition-all border border-rose-200 dark:border-rose-500/30"
-              >
-                Eliminar Equipo
-              </button>
-            )}
-          </div>
-        )}
+        {/* Right side: SSOMA actions + PDF button */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {isSsomaOrAdmin && (
+            <>
+              {equipo.estado === 'Bloqueado por SSOMA' ? (
+                <button 
+                  onClick={() => setShowReleaseForm(true)}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-xs active:scale-98 transition-all"
+                >
+                  Liberar Equipo (SSOMA)
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setShowBlockForm(true)}
+                  className="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-xs active:scale-98 transition-all"
+                >
+                  Bloquear Equipo (SSOMA)
+                </button>
+              )}
+              
+              {user.rol === 'Administrador' && (
+                <button 
+                  onClick={handleDelete}
+                  className="bg-rose-100 hover:bg-rose-200 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold py-2.5 px-4 rounded-xl shadow-md text-xs active:scale-98 transition-all border border-rose-200 dark:border-rose-500/30"
+                >
+                  Eliminar Equipo
+                </button>
+              )}
+            </>
+          )}
+          
+          {/* PDF export button - visible to all */}
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 px-4 rounded-xl shadow-md text-xs transition-all"
+            title="Descargar Ficha Técnica en PDF"
+          >
+            <Download className="h-4 w-4" />
+            Ficha Técnica PDF
+          </button>
+        </div>
       </div>
 
       {/* Tabs list */}
@@ -306,8 +462,8 @@ export const EquipoDetalle: React.FC<EquipoDetalleProps> = ({ placa, onBack, use
           const semaforo: SemaforoDoc[] = [
             { label: 'SOAT', vence: equipo.soatVencimiento ?? null, dias: diffDays(equipo.soatVencimiento) },
             { label: 'Rev. Técnica', vence: equipo.revisionTecnicaVencimiento ?? null, dias: diffDays(equipo.revisionTecnicaVencimiento) },
-            { label: 'Permiso Circulación', vence: (equipo as any).permisoCirculacionVencimiento ?? null, dias: diffDays((equipo as any).permisoCirculacionVencimiento) },
-            { label: 'Póliza de Seguro', vence: (equipo as any).polizaVencimiento ?? null, dias: diffDays((equipo as any).polizaVencimiento) },
+            { label: 'Permiso Circulación', vence: equipo.permisoCirculacionVencimiento ?? null, dias: diffDays(equipo.permisoCirculacionVencimiento) },
+            { label: 'Póliza de Seguro', vence: equipo.polizaVencimiento ?? null, dias: diffDays(equipo.polizaVencimiento) },
           ];
 
           const semaforoColor = (dias: number | null) => {
@@ -849,6 +1005,58 @@ export const EquipoDetalle: React.FC<EquipoDetalleProps> = ({ placa, onBack, use
                     <span className="text-[9px] text-slate-400 mt-0.5 block">Horas de control: {workingHours.toFixed(1)} hrs</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Detalle Horas Hombre por Personal */}
+              <div className="p-5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
+                <h4 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wide">Detalle Horas Hombre por Personal</h4>
+                {(() => {
+                  const conductorMap = new Map<string, { normal: number; extra: number }>();
+                  tareos.forEach((t: any) => {
+                    const name = t.conductor ? `${t.conductor.nombre} ${t.conductor.apellido}` : (t.conductorId ? `Conductor #${t.conductorId}` : 'Sin asignar');
+                    const prev = conductorMap.get(name) || { normal: 0, extra: 0 };
+                    conductorMap.set(name, {
+                      normal: prev.normal + Number(t.horasNormales || 0),
+                      extra: prev.extra + Number(t.horasExtras || 0),
+                    });
+                  });
+                  const entries = Array.from(conductorMap.entries());
+                  if (entries.length === 0) {
+                    return <p className="text-xs text-slate-400 italic">No hay tareos registrados para este equipo.</p>;
+                  }
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                            <th className="py-2 px-2 font-semibold">Personal</th>
+                            <th className="py-2 px-2 font-semibold text-right">Horas Normales</th>
+                            <th className="py-2 px-2 font-semibold text-right">Horas Extras</th>
+                            <th className="py-2 px-2 font-semibold text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {entries.map(([name, hrs], idx) => (
+                            <tr key={idx} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-white dark:hover:bg-slate-900 transition-colors">
+                              <td className="py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">{name}</td>
+                              <td className="py-2 px-2 text-right font-mono">{hrs.normal.toFixed(1)}</td>
+                              <td className="py-2 px-2 text-right font-mono text-amber-500">{hrs.extra.toFixed(1)}</td>
+                              <td className="py-2 px-2 text-right font-mono font-bold text-emerald-600">{(hrs.normal + hrs.extra).toFixed(1)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="font-bold text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-700">
+                            <td className="py-2 px-2">TOTAL</td>
+                            <td className="py-2 px-2 text-right font-mono">{entries.reduce((s, [, h]) => s + h.normal, 0).toFixed(1)}</td>
+                            <td className="py-2 px-2 text-right font-mono text-amber-500">{entries.reduce((s, [, h]) => s + h.extra, 0).toFixed(1)}</td>
+                            <td className="py-2 px-2 text-right font-mono text-emerald-600">{entries.reduce((s, [, h]) => s + h.normal + h.extra, 0).toFixed(1)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Costs Breakdown Chart Simulation */}

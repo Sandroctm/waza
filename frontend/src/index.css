@@ -2,48 +2,49 @@
 
 @layer base {
   :root {
-    --background: 220 15% 97%;          /* Gris claro refinado */
-    --foreground: 224 40% 10%;          /* Gris casi negro */
-    --card: 0 0% 100%;                  /* Blanco puro */
-    --card-foreground: 224 40% 10%;
+    /* Nature-inspired: sky blue, cherry blossom, emerald green, river teal */
+    --background: 200 25% 96%;            /* Cielo claro suave */
+    --foreground: 210 40% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 40% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 40% 10%;
-    --primary: 145 60% 18%;            /* Verde oscuro ECOSEM (#115e3b) */
+    --popover-foreground: 210 40% 10%;
+    --primary: 145 60% 18%;              /* Verde bosque profundo */
     --primary-foreground: 145 60% 98%;
-    --secondary: 145 20% 90%;          /* Gris con tinte verde claro */
-    --secondary-foreground: 145 60% 15%;
-    --muted: 220 10% 93%;               /* Gris suave */
-    --muted-foreground: 220 10% 45%;
-    --accent: 142 70% 36%;             /* Verde vivo acento (#15803d) */
+    --secondary: 200 50% 92%;            /* Azul cielo claro */
+    --secondary-foreground: 200 60% 20%;
+    --muted: 200 20% 93%;
+    --muted-foreground: 210 15% 45%;
+    --accent: 142 65% 32%;               /* Verde esmeralda vivo */
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 89%;              /* Gris borde sutil */
-    --input: 220 13% 89%;
+    --border: 200 20% 87%;
+    --input: 200 20% 87%;
     --ring: 145 60% 18%;
-    --radius: 1rem;                     /* Bordes redondeados más premium */
+    --radius: 1rem;
   }
 
   .dark {
-    --background: 224 25% 8%;           /* Slate oscuro profundo */
+    --background: 215 30% 7%;            /* Noche profunda */
     --foreground: 210 20% 98%;
-    --card: 224 25% 10%;                 /* Slate card oscuro */
+    --card: 215 28% 10%;
     --card-foreground: 210 20% 98%;
-    --popover: 224 25% 10%;
+    --popover: 215 28% 10%;
     --popover-foreground: 210 20% 98%;
-    --primary: 142 70% 36%;             /* Verde acento como primario en modo oscuro */
+    --primary: 142 70% 38%;
     --primary-foreground: 210 20% 98%;
-    --secondary: 224 20% 15%;
+    --secondary: 215 22% 15%;
     --secondary-foreground: 210 20% 98%;
-    --muted: 224 20% 15%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 142 70% 45%;             /* Verde brillante para acentos oscuros */
+    --muted: 215 22% 14%;
+    --muted-foreground: 217 12% 65%;
+    --accent: 142 70% 48%;
     --accent-foreground: 210 20% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 20% 98%;
-    --border: 224 20% 15%;
-    --input: 224 20% 15%;
-    --ring: 142 70% 36%;
+    --border: 215 22% 15%;
+    --input: 215 22% 15%;
+    --ring: 142 70% 38%;
   }
 
   body {
@@ -55,19 +56,28 @@
   }
 }
 
-/* Glassmorphism Classes */
+/* Glassmorphism Classes — Nature-inspired */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 30px rgba(16, 185, 129, 0.05);
 }
 
 .dark .glass-panel {
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(10, 20, 35, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Cherry blossom decorative petal effect */
+.cherry-bg {
+  background-image: radial-gradient(ellipse at 20% 10%, rgba(252, 182, 197, 0.15) 0%, transparent 50%),
+                    radial-gradient(ellipse at 80% 80%, rgba(125, 211, 252, 0.12) 0%, transparent 50%),
+                    radial-gradient(ellipse at 50% 50%, rgba(52, 211, 153, 0.08) 0%, transparent 70%);
 }
 
 /* Custom Scrollbar */

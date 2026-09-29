@@ -59,7 +59,11 @@ builder.Services.AddAuthentication(options =>
         {
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/notificationHub"))
+            if (!string.IsNullOrEmpty(accessToken) && (
+                path.StartsWithSegments("/notificationHub") ||
+                path.StartsWithSegments("/api/checklists/exportar-excel") ||
+                path.StartsWithSegments("/api/reportetonelada/exportar-excel")
+            ))
             {
                 context.Token = accessToken;
             }
@@ -71,6 +75,7 @@ builder.Services.AddAuthentication(options =>
 // --- 5. Custom Services ---
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddHostedService<GpsSimulationService>();
+builder.Services.AddHostedService<ReporteDiarioService>();
 
 // --- 5.2 Email Service ---
 builder.Services.Configure<EmailConfig>(builder.Configuration.GetSection("EmailConfig"));

@@ -50,6 +50,7 @@ namespace Sigecosem.WebApi.Controllers
                 .Include(t => t.Equipo)
                 .Include(t => t.Operador)
                 .Include(t => t.Proyecto)
+                .Include(t => t.Conductor)
                 .OrderByDescending(t => t.Fecha)
                 .ToList();
             return Ok(tareos);
@@ -148,6 +149,7 @@ namespace Sigecosem.WebApi.Controllers
             var combustibles = _context.Combustibles
                 .Include(c => c.Equipo)
                 .Include(c => c.Operador)
+                .Include(c => c.Conductor)
                 .OrderByDescending(c => c.Fecha)
                 .ToList();
             return Ok(combustibles);
@@ -162,6 +164,26 @@ namespace Sigecosem.WebApi.Controllers
             combustible.CostoTotal = combustible.Galones * combustible.PrecioGalon;
             _context.Combustibles.Add(combustible);
             _context.SaveChanges();
+
+            // Store in Excel database replica
+            try
+            {
+                var cond = combustible.ConductorId.HasValue ? _context.Conductores.FirstOrDefault(c => c.Id == combustible.ConductorId) : null;
+                string condStr = cond != null ? $"{cond.Nombre} {cond.Apellido}" : "Sin conductor";
+                Sigecosem.WebApi.Helpers.ExcelDbHelper.AppendCombustible(
+                    combustible.EquipoPlaca,
+                    condStr,
+                    combustible.Galones,
+                    combustible.CostoTotal,
+                    combustible.HorometroVal,
+                    combustible.FotoUrl,
+                    ""
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Failed to append combustible to excel: " + ex.Message);
+            }
 
             Audit("Registrar Combustible", $"Combustible registrado para Placa: {combustible.EquipoPlaca}, Galones: {combustible.Galones}, Costo Total: {combustible.CostoTotal}");
 

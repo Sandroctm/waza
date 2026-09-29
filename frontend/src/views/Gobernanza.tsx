@@ -816,8 +816,8 @@ const TabVotaciones: React.FC<{
                   <p className="text-lg font-black text-slate-400">{v.votos.filter(x => x.voto === 'Abstención').length}</p>
                   <p className="text-[10px] text-slate-400 font-bold">ABST.</p>
                 </div>
-                <button className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-500/10 transition-colors">
-                  <Link2 className="h-4 w-4" title="Registro Blockchain" />
+                <button className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-500/10 transition-colors" title="Registro Blockchain">
+                  <Link2 className="h-4 w-4" />
                 </button>
               </div>
             </div>

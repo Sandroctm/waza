@@ -22,21 +22,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user }) => {
 
   const fetchDashboardData = async () => {
     try {
-      const kpiData = await api.getKpis();
-      setKpis(kpiData);
+      const kpiData = await api.getKpis().catch(() => ({
+        total: 0, disponible: 0, operativo: 0, mantenimientoPrev: 0, mantenimientoCorr: 0, bloqueado: 0, fueraServicio: 0
+      }));
+      setKpis(kpiData || { total: 0, disponible: 0, operativo: 0, mantenimientoPrev: 0, mantenimientoCorr: 0, bloqueado: 0, fueraServicio: 0 });
 
       // Fetch checklists or alerts to display
-      const allChecklists = await api.getCheckLists();
-      // Compile recent alarms from actual DB checks or alert list
-      // For presentation, let's fetch actual equipments or simulate some alert lists
-      const equipments = await api.getEquipos();
+      await api.getCheckLists().catch(() => []);
+      
+      const equipments = await api.getEquipos().catch(() => []);
+      const eqArray = Array.isArray(equipments) ? equipments : [];
       
       const compiledAlerts: Alerta[] = [];
-      equipments.forEach((eq, idx) => {
+      eqArray.forEach((eq, idx) => {
+        if (!eq) return;
         if (eq.estado === "Bloqueado por SSOMA") {
           compiledAlerts.push({
             id: idx,
-            equipoPlaca: eq.placa,
+            equipoPlaca: eq.placa || '',
             tipo: "FallaCritica",
             mensaje: `Equipo bloqueado por SSOMA. Requiere inspección correctiva inmediata.`,
             fechaCreacion: new Date().toISOString(),
@@ -47,9 +50,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user }) => {
         if (eq.soatVencimiento && new Date(eq.soatVencimiento) < new Date()) {
           compiledAlerts.push({
             id: idx + 100,
-            equipoPlaca: eq.placa,
+            equipoPlaca: eq.placa || '',
             tipo: "VencimientoSOAT",
-            mensaje: `SOAT vencido para el vehículo ${eq.placa} (${eq.codigoInterno}).`,
+            mensaje: `SOAT vencido para el vehículo ${eq.placa || ''} (${eq.codigoInterno || ''}).`,
             fechaCreacion: eq.soatVencimiento,
             resuelta: false
           });

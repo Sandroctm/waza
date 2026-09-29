@@ -22,6 +22,7 @@ export interface Usuario {
   email: string;
   nombre: string;
   apellido: string;
+  cargo?: string;
   rolId: number;
   rol?: Rol;
   areaId?: number;
@@ -30,9 +31,31 @@ export interface Usuario {
   permisos?: string[];
 }
 
+export interface ReporteTonelada {
+  id: number;
+  fecha: string;
+  codBalanza?: string;
+  descMat?: string;
+  centroOrigen?: string;
+  descRuta?: string;
+  regPesaje?: string;
+  placa: string;
+  conductor: string;
+  empresaContratista: string;
+  tipoMaterial: string;
+  ruta: string;
+  pesoBruto: number;
+  tara: number;
+  pesoNeto: number;
+  tms: number;
+  humedad: number;
+  observaciones: string;
+}
+
 export interface Equipo {
   placa: string;
   codigoInterno: string;
+  descripcion?: string;
   tipo: string;
   marca: string;
   modelo: string;
@@ -40,6 +63,7 @@ export interface Equipo {
   motor: string;
   chasis: string;
   color: string;
+  anioFabricacion?: number | string;
   proyectoId?: number;
   proyecto?: Proyecto;
   areaId?: number;
@@ -54,6 +78,8 @@ export interface Equipo {
   seguro: string;
   soatVencimiento?: string;
   revisionTecnicaVencimiento?: string;
+  permisoCirculacionVencimiento?: string;
+  polizaVencimiento?: string;
   fotoUrl: string;
   gpsId: string;
 }
@@ -82,6 +108,12 @@ export interface CheckList {
   firmaOperador: string;
   firmaSupervisor: string;
   itemsJson: string; // JSON string of components
+  servicio: string;
+  conductorId?: number;
+  kilometrajeInicial?: number;
+  kilometrajeFinal?: number;
+  horometroInicial?: number;
+  horometroFinal?: number;
 }
 
 export interface Tareo {
@@ -90,6 +122,8 @@ export interface Tareo {
   equipo?: Equipo;
   operadorId: number;
   operador?: Usuario;
+  conductorId?: number;
+  conductor?: Conductor;
   actividad: string;
   fecha: string;
   horaInicio: string;
@@ -126,6 +160,8 @@ export interface Combustible {
   horometroVal: number;
   operadorId: number;
   operador?: Usuario;
+  conductorId?: number;
+  conductor?: Conductor;
   proyectoId?: number;
   proyecto?: Proyecto;
   areaId?: number;
@@ -202,4 +238,18 @@ export interface DashboardKpis {
   mantenimientoCorr: number;
   bloqueado: number;
   fueraServicio: number;
+}
+
+export interface Conductor {
+  id: number;
+  nombre: string;
+  apellido: string;
+  dni: string;
+  licencia: string;
+  categoriaLicencia: string;
+  telefono: string;
+  equipoPlacaAsignada: string;
+  tipoEquipoAutorizado: string;
+  activo: boolean;
+  fechaRegistro: string;
 }

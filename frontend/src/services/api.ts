@@ -1,4 +1,4 @@
-const BASE_URL = '/api';
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface RequestOptions extends RequestInit {
   bodyData?: any;
@@ -103,13 +103,24 @@ function getMockDataForPath<T>(path: string, options: RequestOptions): T {
     } as unknown as T;
   }
 
-  if (normPath.endsWith('/equipos')) {
+  if (normPath.includes('/equipos') && !normPath.includes('/equipos/')) {
     return MOCK_EQUIPOS as unknown as T;
   }
 
-  if (normPath.includes('/equipos/')) {
+  if (normPath.includes('/documentos/upload')) {
+    return {
+      id: Math.floor(Math.random() * 10000),
+      nombre: 'Documento_Prueba.pdf',
+      tipo: 'SOAT',
+      url: '#',
+      fechaVencimiento: new Date().toISOString(),
+      fechaSubida: new Date().toISOString()
+    } as unknown as T;
+  }
+
+  if (normPath.includes('/equipos/') && !normPath.includes('/documentos')) {
     const parts = normPath.split('/');
-    const placa = parts[parts.length - 1].toUpperCase();
+    const placa = parts[parts[1] === 'equipos' ? 2 : parts.length - 1].toUpperCase();
     const equipo = MOCK_EQUIPOS.find(e => e.placa === placa) || MOCK_EQUIPOS[0];
     return {
       equipo,
@@ -143,6 +154,55 @@ function getMockDataForPath<T>(path: string, options: RequestOptions): T {
     return [] as unknown as T;
   }
 
+  if (normPath.includes('/reportetonelada')) {
+    return [
+      {
+        id: 1,
+        descRuta: "MTIC - C. 6",
+        fecha: new Date().toISOString(),
+        regPesaje: "10699070",
+        placa: "CDQ-747",
+        ruta: "3000120",
+        centroOrigen: "PUCARA",
+        empresaContratista: "ECOSEM",
+        tipoMaterial: "Mineral",
+        conductor: "Juan Perez",
+        pesoBruto: 42.50,
+        tara: 15.20,
+        pesoNeto: 27.30,
+        humedad: 3.5,
+        tms: 26.3445,
+        observaciones: "T010-0002",
+        codBalanza: "213",
+        descMat: "213"
+      },
+      {
+        id: 2,
+        descRuta: "MTIC - C. 6",
+        fecha: new Date(Date.now() - 86400000).toISOString(),
+        regPesaje: "10699071",
+        placa: "EGS-123",
+        ruta: "3000120",
+        centroOrigen: "PUCARA",
+        empresaContratista: "ECOSEM",
+        tipoMaterial: "Concentrado",
+        conductor: "Carlos Gomez",
+        pesoBruto: 45.10,
+        tara: 14.80,
+        pesoNeto: 30.30,
+        humedad: 4.0,
+        tms: 29.0880,
+        observaciones: "T010-0003",
+        codBalanza: "Balanza 01",
+        descMat: "Mineral"
+      }
+    ] as unknown as T;
+  }
+
+  if (normPath.includes('/conductores')) {
+    return [] as unknown as T;
+  }
+
   return {} as unknown as T;
 }
 
@@ -155,8 +215,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (options.bodyData) {
-    headers.set('Content-Type', 'application/json');
-    options.body = JSON.stringify(options.bodyData);
+    if (options.bodyData instanceof FormData) {
+      options.body = options.bodyData;
+      // Do not set Content-Type for FormData, the browser will set it with the correct boundary
+    } else {
+      headers.set('Content-Type', 'application/json');
+      options.body = JSON.stringify(options.bodyData);
+    }
   }
 
   options.headers = headers;
@@ -183,6 +248,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     
     return response.blob() as unknown as T;
   } catch (error) {
+    if (path.toLowerCase().includes('/auth/login')) {
+      throw error;
+    }
     console.warn(`API Request to ${path} failed. Falling back to local mock data.`, error);
     return getMockDataForPath<T>(path, options);
   }
@@ -195,10 +263,6 @@ export const api = {
   // Usuarios
   getRoles: () => request<any[]>('/usuarios/roles'),
   getAreas: () => request<any[]>('/usuarios/areas'),
-  getUsuarios: () => request<any[]>('/usuarios'),
-  createUsuario: (usuario: any) => request<any>('/usuarios', { method: 'POST', bodyData: usuario }),
-  toggleUsuarioActivo: (id: number) => request<any>(`/usuarios/${id}/toggle-activo`, { method: 'PUT' }),
-  deleteUsuario: (id: number) => request<any>(`/usuarios/${id}`, { method: 'DELETE' }),
 
   // Equipos (Fleet)
   getEquipos: async (tipo?: string, estado?: string) => {
@@ -209,7 +273,9 @@ export const api = {
       if (estado) params.append('estado', estado);
       query = `?${params.toString()}`;
     }
-    const data = await request<any[]>(`/equipos${query}`);
+    const rawData = await request<any>(`/equipos${query}`);
+    const data = Array.isArray(rawData) ? rawData : [];
+    
     const savedUser = localStorage.getItem('sigecosem_user');
     if (savedUser) {
       try {
@@ -277,25 +343,37 @@ export const api = {
   createCheckList: (checklist: any) => request<any>('/checklists', { method: 'POST', bodyData: checklist }),
   deleteCheckList: (id: number) => request<any>(`/checklists/${id}`, { method: 'DELETE' }),
 
-  // Operaciones
-  getTareos: async () => {
-    const data = await request<any[]>('/operaciones/tareos');
-    const savedUser = localStorage.getItem('sigecosem_user');
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        if (parsed.rol === 'Alpayana' || parsed.nombre === 'Alpayana' || parsed.username?.toLowerCase() === 'alpayana') {
-          const allowedTypes = ['volquete', 'tracto oruga', 'rodillo compactador', 'excavadora', 'camioneta'];
-          return data.filter(item => allowedTypes.includes(item.equipo?.tipo?.toLowerCase()));
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return data;
+  // Usuarios
+  getUsuarios: () => request<any[]>('/usuarios'),
+  createUsuario: (usuario: any) => request<any>('/usuarios', { method: 'POST', bodyData: usuario }),
+  updateUsuario: (id: number, usuario: any) => request<any>(`/usuarios/${id}`, { method: 'PUT', bodyData: usuario }),
+  toggleUsuarioActivo: (id: number) => request<any>(`/usuarios/${id}/toggle-activo`, { method: 'PUT' }),
+  deleteUsuario: (id: number) => request<any>(`/usuarios/${id}`, { method: 'DELETE' }),
+
+  // Conductores
+  getConductores: () => request<any[]>('/conductores'),
+  getConductoresTodos: () => request<any[]>('/conductores/todos'),
+  createConductor: (conductor: any) => request<any>('/conductores', { method: 'POST', bodyData: conductor }),
+  updateConductor: (id: number, conductor: any) => request<any>(`/conductores/${id}`, { method: 'PUT', bodyData: conductor }),
+  deleteConductor: (id: number) => request<any>(`/conductores/${id}`, { method: 'DELETE' }),
+
+  // Reporte Tonelada
+  getReportesTonelada: (params?: { start?: string; end?: string; codBalanza?: string; descMat?: string; centroOrigen?: string }) => {
+    const queryParts: string[] = [];
+    if (params?.start) queryParts.push(`startDate=${encodeURIComponent(params.start)}`);
+    if (params?.end) queryParts.push(`endDate=${encodeURIComponent(params.end)}`);
+    if (params?.codBalanza) queryParts.push(`codBalanza=${encodeURIComponent(params.codBalanza)}`);
+    if (params?.descMat) queryParts.push(`descMat=${encodeURIComponent(params.descMat)}`);
+    if (params?.centroOrigen) queryParts.push(`centroOrigen=${encodeURIComponent(params.centroOrigen)}`);
+    const q = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return request<any[]>(`/reportetonelada${q}`);
   },
+  createReporteTonelada: (reporte: any) => request<any>('/reportetonelada', { method: 'POST', bodyData: reporte }),
+
+  // Operaciones
+  getTareos: () => request<any[]>('/operaciones/tareos'),
   createTareo: (tareo: any) => request<any>('/operaciones/tareos', { method: 'POST', bodyData: tareo }),
-  
+
   getHorometros: () => request<any[]>('/operaciones/horometros'),
   createHorometro: (horometro: any) => request<any>('/operaciones/horometros', { method: 'POST', bodyData: horometro }),
   
@@ -345,6 +423,7 @@ export const api = {
 
   // Config
   getBackupUrl: () => `${window.location.origin}/api/config/backup?access_token=${localStorage.getItem('sigecosem_token')}`,
+  getExcelDbUrl: () => `${window.location.origin}/api/config/descargar-excel-db?access_token=${localStorage.getItem('sigecosem_token')}`,
   restoreBackup: (backupData: any) => request<any>('/config/restore', { method: 'POST', bodyData: backupData }),
 
   // AI Assistant
@@ -355,5 +434,30 @@ export const api = {
     request<{ message: string }>('/reportes/enviar-email', {
       method: 'POST',
       bodyData: { tipoReporte, registroId, destinatarios }
+    }),
+
+  // Documentos por equipo (SOAT, Revisión Técnica, etc.)
+  getDocumentos: (placa: string) => request<any[]>(`/equipos/${placa}/documentos`),
+  createDocumento: (placa: string, doc: any) => request<any>(`/equipos/${placa}/documentos`, { method: 'POST', bodyData: doc }),
+  deleteDocumento: (placa: string, id: number) => request<any>(`/equipos/${placa}/documentos/${id}`, { method: 'DELETE' }),
+  uploadDocumento: (placa: string, formData: FormData) => request<any>(`/equipos/${placa}/documentos/upload`, { method: 'POST', bodyData: formData }),
+
+  // Proyectos
+  getProyectos: () => request<any[]>('/equipos/proyectos'),
+  createProyecto: (proyecto: any) => request<any>('/equipos/proyectos', { method: 'POST', bodyData: proyecto }),
+
+  // Permisos de rol
+  getRolPermisos: (rolId: number) => request<any>(`/usuarios/roles/${rolId}/permisos`),
+  updateRolPermisos: (rolId: number, permisos: string) => request<any>(`/usuarios/roles/${rolId}/permisos`, { method: 'PUT', bodyData: { permisos } }),
+
+  // Permisos de usuario
+  getUsuarioPermisos: (userId: number) => request<any>(`/usuarios/${userId}/permisos`),
+  updateUsuarioPermisos: (userId: number, permisos: string) => request<any>(`/usuarios/${userId}/permisos`, { method: 'PUT', bodyData: { permisos } }),
+
+  // Envío automático manual (para testing)
+  enviarReporteDiarioManual: (destinatarios: string[]) =>
+    request<{ message: string }>('/reportes/enviar-email', {
+      method: 'POST',
+      bodyData: { tipoReporte: 'resumen-diario', registroId: 0, destinatarios }
     }),
 };

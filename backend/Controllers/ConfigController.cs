@@ -120,5 +120,25 @@ namespace Sigecosem.WebApi.Controllers
                 return StatusCode(500, new { message = $"Error en restauración: {ex.Message}" });
             }
         }
+        [HttpGet("descargar-excel-db")]
+        public IActionResult DescargarExcelDb()
+        {
+            try
+            {
+                Sigecosem.WebApi.Helpers.ExcelDbHelper.GenerateExcelDatabase(_context);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Failed to generate excel dynamically: " + ex.Message);
+            }
+
+            var path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "uploads", "excel_database.xlsx");
+            if (!System.IO.File.Exists(path))
+            {
+                return NotFound(new { message = "La base de datos en Excel aún no ha sido creada o no contiene registros." });
+            }
+            var fileBytes = System.IO.File.ReadAllBytes(path);
+            return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "excel_database.xlsx");
+        }
     }
 }

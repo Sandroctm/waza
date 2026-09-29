@@ -50,6 +50,8 @@ namespace Sigecosem.WebApi.Models
         public bool Activo { get; set; } = true;
         public int IntentosFallidos { get; set; }
         public DateTime? BloqueadoHasta { get; set; }
+        public string Permisos { get; set; } = string.Empty; // Comma-separated list of allowed views
+        public string Cargo { get; set; } = string.Empty; // Position / Puesto
     }
 
     public class Equipo
@@ -95,8 +97,11 @@ namespace Sigecosem.WebApi.Models
         public string Seguro { get; set; } = string.Empty;
         public DateTime? SOATVencimiento { get; set; }
         public DateTime? RevisionTecnicaVencimiento { get; set; }
+        public DateTime? PermisoCirculacionVencimiento { get; set; }
+        public DateTime? PolizaVencimiento { get; set; }
         public string FotoUrl { get; set; } = string.Empty;
         public string GPSId { get; set; } = string.Empty;
+        public int? AnioFabricacion { get; set; }
     }
 
     public class CheckList
@@ -113,6 +118,9 @@ namespace Sigecosem.WebApi.Models
         public int OperadorId { get; set; }
         [ForeignKey("OperadorId")]
         public Usuario? Operador { get; set; }
+
+        public int? ConductorId { get; set; }
+        public Conductor? Conductor { get; set; }
 
         public int? SupervisorId { get; set; }
         [ForeignKey("SupervisorId")]
@@ -132,6 +140,13 @@ namespace Sigecosem.WebApi.Models
         public string Estado { get; set; } = "Pendiente"; // Aprobado, Rechazado, Corregido
         public string FirmaOperador { get; set; } = string.Empty; // Base64 string
         public string FirmaSupervisor { get; set; } = string.Empty; // Base64 string
+        [MaxLength(150)]
+        public string Servicio { get; set; } = string.Empty;
+
+        public decimal? KilometrajeInicial { get; set; }
+        public decimal? KilometrajeFinal { get; set; }
+        public decimal? HorometroInicial { get; set; }
+        public decimal? HorometroFinal { get; set; }
 
         [Column(TypeName = "jsonb")]
         public string ItemsJson { get; set; } = "{}"; // JSON string detailing components status
@@ -158,6 +173,9 @@ namespace Sigecosem.WebApi.Models
         public int? AreaId { get; set; }
         public Area? Area { get; set; }
         public string Observaciones { get; set; } = string.Empty;
+        public string FotoUrl { get; set; } = string.Empty;
+        public int? ConductorId { get; set; }
+        public Conductor? Conductor { get; set; }
     }
 
     public class Horometro
@@ -195,6 +213,9 @@ namespace Sigecosem.WebApi.Models
         public int? AreaId { get; set; }
         public Area? Area { get; set; }
         public DateTime Fecha { get; set; }
+        public string FotoUrl { get; set; } = string.Empty;
+        public int? ConductorId { get; set; }
+        public Conductor? Conductor { get; set; }
     }
 
     public class Mantenimiento
@@ -282,5 +303,60 @@ namespace Sigecosem.WebApi.Models
         [MaxLength(100)]
         public string Computadora { get; set; } = string.Empty;
         public DateTime FechaHora { get; set; } = DateTime.UtcNow;
+    }
+
+    public class Conductor
+    {
+        public int Id { get; set; }
+        [Required, MaxLength(100)]
+        public string Nombre { get; set; } = string.Empty;
+        [Required, MaxLength(100)]
+        public string Apellido { get; set; } = string.Empty;
+        [MaxLength(20)]
+        public string Dni { get; set; } = string.Empty;
+        [MaxLength(30)]
+        public string Licencia { get; set; } = string.Empty;
+        [MaxLength(10)]
+        public string CategoriaLicencia { get; set; } = string.Empty;
+        [MaxLength(20)]
+        public string Telefono { get; set; } = string.Empty;
+        [MaxLength(20)]
+        public string EquipoPlacaAsignada { get; set; } = string.Empty;
+        [MaxLength(500)]
+        public string TipoEquipoAutorizado { get; set; } = string.Empty; // Comma-separated: "Volquete,Excavadora,Camioneta"
+        public bool Activo { get; set; } = true;
+        public DateTime FechaRegistro { get; set; } = DateTime.UtcNow;
+    }
+
+    public class ReporteTonelada
+    {
+        public int Id { get; set; }
+        public DateTime Fecha { get; set; } = DateTime.UtcNow;
+        [MaxLength(50)]
+        public string CodBalanza { get; set; } = "(Todas)";
+        [MaxLength(100)]
+        public string DescMat { get; set; } = "Mineral";
+        [MaxLength(100)]
+        public string CentroOrigen { get; set; } = "PUCARA";
+        [MaxLength(150)]
+        public string DescRuta { get; set; } = "MTIC - C. 6";
+        [MaxLength(50)]
+        public string RegPesaje { get; set; } = string.Empty;
+        [Required, MaxLength(20)]
+        public string Placa { get; set; } = string.Empty; // VEHICULO
+        [Required, MaxLength(100)]
+        public string Conductor { get; set; } = string.Empty;
+        [Required, MaxLength(100)]
+        public string EmpresaContratista { get; set; } = string.Empty; // w / Contratista
+        [Required, MaxLength(50)]
+        public string TipoMaterial { get; set; } = string.Empty;
+        [Required, MaxLength(50)]
+        public string Ruta { get; set; } = string.Empty; // RUTA code
+        public decimal PesoBruto { get; set; } // PESOENTRA
+        public decimal Tara { get; set; } // PESOSALID
+        public decimal PesoNeto { get; set; } // PESONETO
+        public decimal Tms { get; set; } // TMS_SECAS
+        public decimal Humedad { get; set; }
+        public string Observaciones { get; set; } = string.Empty; // OBSERVACI
     }
 }

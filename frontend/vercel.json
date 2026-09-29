@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "http://192.241.244.170/api/:path*"
+    },
+    {
+      "source": "/notificationHub/:path*",
+      "destination": "http://192.241.244.170/notificationHub/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Sigecosem.WebApi.Models;
 
 namespace Sigecosem.WebApi.Data
@@ -50,8 +52,8 @@ namespace Sigecosem.WebApi.Data
             var firstArea = context.Areas.FirstOrDefault()?.Id ?? 1;
             
             // Find appropriate users or fallback to first
-            var firstSup = context.Usuarios.FirstOrDefault(u => u.Rol.Nombre == "SSOMA")?.Id ?? 1;
-            var firstOper = context.Usuarios.FirstOrDefault(u => u.Rol.Nombre == "Lodos" || u.Rol.Nombre == "Conductor")?.Id ?? 1;
+            var firstSup = context.Usuarios.FirstOrDefault(u => u.Rol != null && u.Rol.Nombre == "SSOMA")?.Id ?? 1;
+            var firstOper = context.Usuarios.FirstOrDefault(u => u.Rol != null && (u.Rol.Nombre == "Lodos" || u.Rol.Nombre == "Conductor"))?.Id ?? 1;
 
             if (!context.Equipos.Any(e => e.Tipo == "Tracto Oruga"))
             {
@@ -92,17 +94,263 @@ namespace Sigecosem.WebApi.Data
                 });
             }
             context.SaveChanges();
+
+            // Seed reports tables if empty to guarantee demo data is visible on existing databases
+            var ssomaUser = context.Usuarios.FirstOrDefault(u => u.Rol != null && u.Rol.Nombre == "SSOMA") ?? context.Usuarios.FirstOrDefault();
+            var lodosUser = context.Usuarios.FirstOrDefault(u => u.Rol != null && (u.Rol.Nombre == "Lodos" || u.Rol.Nombre == "Conductor")) ?? context.Usuarios.FirstOrDefault();
+            var firstProject = context.Proyectos.FirstOrDefault();
+            var firstAreaObj = context.Areas.FirstOrDefault();
+
+            if (ssomaUser != null && lodosUser != null && firstProject != null && firstAreaObj != null)
+            {
+                if (!context.CheckLists.Any())
+                {
+                    string checklistItems = @"{
+                        ""motor"": {""estado"": ""Bueno"", ""observacion"": ""Nivel de aceite correcto""},
+                        ""frenos"": {""estado"": ""Bueno"", ""observacion"": ""Presión de aire estable""},
+                        ""direccion"": {""estado"": ""Bueno"", ""observacion"": ""Alineación correcta""},
+                        ""luces"": {""estado"": ""Bueno"", ""observacion"": ""Faros limpios""},
+                        ""neumaticos"": {""estado"": ""Bueno"", ""observacion"": ""Presión 110 PSI""},
+                        ""alarmaRetroceso"": {""estado"": ""Bueno"", ""observacion"": ""Sonido fuerte""},
+                        ""extintor"": {""estado"": ""Bueno"", ""observacion"": ""Carga vigente""},
+                        ""fluidos"": {""estado"": ""Bueno"", ""observacion"": ""Sin fugas visibles""}
+                    }";
+
+                    context.CheckLists.Add(new CheckList
+                    {
+                        EquipoPlaca = "TRA-555",
+                        FechaHora = DateTime.UtcNow.AddDays(-1),
+                        Semana = 26,
+                        Mes = 6,
+                        Anio = 2026,
+                        OperadorId = lodosUser.Id,
+                        SupervisorId = ssomaUser.Id,
+                        ProyectoId = firstProject.Id,
+                        AreaId = firstAreaObj.Id,
+                        CombustibleNivel = 80m,
+                        Observaciones = "Inspección inicial aprobada. Equipo listo para operar.",
+                        TieneFallasCriticas = false,
+                        Estado = "Aprobado",
+                        FirmaOperador = "MOCK_FIRMA_OPERADOR_B64",
+                        FirmaSupervisor = "MOCK_FIRMA_SUPERVISOR_B64",
+                        Servicio = "Servicio de Excavación Principal",
+                        ItemsJson = checklistItems,
+                        FotoUrl = "[\"https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=400\"]"
+                    });
+
+                    context.CheckLists.Add(new CheckList
+                    {
+                        EquipoPlaca = "ROD-888",
+                        FechaHora = DateTime.UtcNow.AddDays(-2),
+                        Semana = 26,
+                        Mes = 6,
+                        Anio = 2026,
+                        OperadorId = lodosUser.Id,
+                        SupervisorId = ssomaUser.Id,
+                        ProyectoId = firstProject.Id,
+                        AreaId = firstAreaObj.Id,
+                        CombustibleNivel = 45m,
+                        Observaciones = "Falla detectada en manguera de presión de dirección.",
+                        TieneFallasCriticas = true,
+                        Estado = "Rechazado",
+                        FirmaOperador = "MOCK_FIRMA_OPERADOR_B64",
+                        FirmaSupervisor = "",
+                        Servicio = "Compactación de Terreno",
+                        ItemsJson = checklistItems,
+                        FotoUrl = "[]"
+                    });
+                    context.SaveChanges();
+                }
+
+                if (!context.Tareos.Any())
+                {
+                    context.Tareos.Add(new Tareo
+                    {
+                        EquipoPlaca = "TRA-555",
+                        OperadorId = lodosUser.Id,
+                        Actividad = "Movimiento de tierras convenio Alpayana",
+                        Fecha = DateTime.UtcNow.AddDays(-1).Date,
+                        HoraInicio = new TimeSpan(7, 0, 0),
+                        HoraFin = new TimeSpan(17, 0, 0),
+                        HorasNormales = 8m,
+                        HorasExtras = 2m,
+                        ProyectoId = firstProject.Id,
+                        AreaId = firstAreaObj.Id,
+                        Observaciones = "Sin contratiempos.",
+                        FotoUrl = "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=400"
+                    });
+                    context.SaveChanges();
+                }
+
+                if (!context.Combustibles.Any())
+                {
+                    context.Combustibles.Add(new Combustible
+                    {
+                        EquipoPlaca = "TRA-555",
+                        Proveedor = "Pecsa",
+                        Grifo = "Grifo las bambas central",
+                        Galones = 50.0m,
+                        PrecioGalon = 17.5m,
+                        CostoTotal = 875.0m,
+                        HorometroVal = 1250m,
+                        OperadorId = lodosUser.Id,
+                        ProyectoId = firstProject.Id,
+                        AreaId = firstAreaObj.Id,
+                        Fecha = DateTime.UtcNow.AddDays(-1),
+                        FotoUrl = "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=400"
+                    });
+                    context.SaveChanges();
+                }
+
+                if (!context.Mantenimientos.Any())
+                {
+                    context.Mantenimientos.Add(new Mantenimiento
+                    {
+                        EquipoPlaca = "TRA-555",
+                        Tipo = "Preventivo",
+                        Descripcion = "Cambio de aceite de motor y filtros primarios de combustible.",
+                        Repuestos = "[{\"nombre\":\"Filtro combustible\",\"cantidad\":1,\"precio\":180.00}]",
+                        CostoTotal = 350.0m,
+                        Proveedor = "Ferreyros CAT",
+                        Responsable = "Ing. Manuel Cáceres",
+                        Fecha = DateTime.UtcNow.AddDays(-5),
+                        FotoUrl = "https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=400"
+                    });
+                    context.SaveChanges();
+                }
+            }
         }
 
         public static void Initialize(ApplicationDbContext context)
         {
             context.Database.EnsureCreated();
 
+            try
+            {
+                // Use Npgsql directly to avoid EF Core relational extension method issues
+                var connectionString = context.Database.GetConnectionString();
+                using var npgsqlConn = new NpgsqlConnection(connectionString);
+                npgsqlConn.Open();
+                using var cmd = npgsqlConn.CreateCommand();
+                cmd.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS ""Conductores"" (
+                        ""Id"" serial PRIMARY KEY,
+                        ""Nombre"" varchar(100) NOT NULL,
+                        ""Apellido"" varchar(100) NOT NULL,
+                        ""Dni"" varchar(20) NOT NULL,
+                        ""EquipoPlacaAsignada"" varchar(20) NOT NULL,
+                        ""Activo"" boolean NOT NULL DEFAULT true,
+                        ""FechaRegistro"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS ""ReportesTonelada"" (
+                        ""Id"" serial PRIMARY KEY,
+                        ""Fecha"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        ""Placa"" varchar(20) NOT NULL,
+                        ""Conductor"" varchar(100) NOT NULL,
+                        ""EmpresaContratista"" varchar(100) NOT NULL,
+                        ""TipoMaterial"" varchar(50) NOT NULL,
+                        ""Ruta"" varchar(50) NOT NULL,
+                        ""PesoBruto"" numeric NOT NULL DEFAULT 0,
+                        ""Tara"" numeric NOT NULL DEFAULT 0,
+                        ""PesoNeto"" numeric NOT NULL DEFAULT 0,
+                        ""Tms"" numeric NOT NULL DEFAULT 0,
+                        ""Humedad"" numeric NOT NULL DEFAULT 0,
+                        ""Observaciones"" text NOT NULL DEFAULT ''
+                    );
+                    ALTER TABLE ""Usuarios"" ADD COLUMN IF NOT EXISTS ""Permisos"" text NOT NULL DEFAULT '';
+                    ALTER TABLE ""Usuarios"" ADD COLUMN IF NOT EXISTS ""Cargo"" varchar(100) NOT NULL DEFAULT '';
+                    ALTER TABLE ""ReportesTonelada"" ADD COLUMN IF NOT EXISTS ""CodBalanza"" varchar(50) NOT NULL DEFAULT '(Todas)';
+                    ALTER TABLE ""ReportesTonelada"" ADD COLUMN IF NOT EXISTS ""DescMat"" varchar(100) NOT NULL DEFAULT 'Mineral';
+                    ALTER TABLE ""ReportesTonelada"" ADD COLUMN IF NOT EXISTS ""CentroOrigen"" varchar(100) NOT NULL DEFAULT 'PUCARA';
+                    ALTER TABLE ""ReportesTonelada"" ADD COLUMN IF NOT EXISTS ""DescRuta"" varchar(150) NOT NULL DEFAULT 'MTIC - C. 6';
+                    ALTER TABLE ""ReportesTonelada"" ADD COLUMN IF NOT EXISTS ""RegPesaje"" varchar(50) NOT NULL DEFAULT '';
+                    ALTER TABLE ""Equipos"" ADD COLUMN IF NOT EXISTS ""AnioFabricacion"" integer NULL;
+                    ALTER TABLE ""Equipos"" ADD COLUMN IF NOT EXISTS ""PolizaVencimiento"" timestamp with time zone NULL;
+                    ALTER TABLE ""Equipos"" ADD COLUMN IF NOT EXISTS ""PermisoCirculacionVencimiento"" timestamp with time zone NULL;
+                    ALTER TABLE ""CheckLists"" ADD COLUMN IF NOT EXISTS ""Servicio"" varchar(150) NOT NULL DEFAULT '';
+                    ALTER TABLE ""CheckLists"" ADD COLUMN IF NOT EXISTS ""ConductorId"" int NULL REFERENCES ""Conductores""(""Id"") ON DELETE SET NULL;
+                    ALTER TABLE ""CheckLists"" ADD COLUMN IF NOT EXISTS ""KilometrajeInicial"" numeric NULL;
+                    ALTER TABLE ""CheckLists"" ADD COLUMN IF NOT EXISTS ""KilometrajeFinal"" numeric NULL;
+                    ALTER TABLE ""CheckLists"" ADD COLUMN IF NOT EXISTS ""HorometroInicial"" numeric NULL;
+                    ALTER TABLE ""CheckLists"" ADD COLUMN IF NOT EXISTS ""HorometroFinal"" numeric NULL;
+                    ALTER TABLE ""Tareos"" ADD COLUMN IF NOT EXISTS ""FotoUrl"" text NOT NULL DEFAULT '';
+                    ALTER TABLE ""Tareos"" ADD COLUMN IF NOT EXISTS ""ConductorId"" int NULL REFERENCES ""Conductores""(""Id"") ON DELETE SET NULL;
+                    ALTER TABLE ""Combustibles"" ADD COLUMN IF NOT EXISTS ""FotoUrl"" text NOT NULL DEFAULT '';
+                    ALTER TABLE ""Combustibles"" ADD COLUMN IF NOT EXISTS ""ConductorId"" int NULL REFERENCES ""Conductores""(""Id"") ON DELETE SET NULL;
+                    ALTER TABLE ""Conductores"" ADD COLUMN IF NOT EXISTS ""Licencia"" varchar(30) NOT NULL DEFAULT '';
+                    ALTER TABLE ""Conductores"" ADD COLUMN IF NOT EXISTS ""CategoriaLicencia"" varchar(10) NOT NULL DEFAULT '';
+                    ALTER TABLE ""Conductores"" ADD COLUMN IF NOT EXISTS ""Telefono"" varchar(20) NOT NULL DEFAULT '';
+                    ALTER TABLE ""Conductores"" ADD COLUMN IF NOT EXISTS ""TipoEquipoAutorizado"" varchar(500) NOT NULL DEFAULT '';
+                ";
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Database schema migration update command failed: " + ex.Message);
+            }
+
             SeedSupplemental(context);
 
             // Look for any users.
             if (context.Usuarios.Any())
             {
+                // Auto-populate empty cargos of default seeded users
+                bool modified = false;
+                var adminUser = context.Usuarios.FirstOrDefault(u => u.Username == "admin" && (u.Cargo == null || u.Cargo == ""));
+                if (adminUser != null) { adminUser.Cargo = "Administrador del Sistema"; modified = true; }
+
+                var gerenteUser = context.Usuarios.FirstOrDefault(u => u.Username == "gerente" && (u.Cargo == null || u.Cargo == ""));
+                if (gerenteUser != null) { gerenteUser.Cargo = "Gerente de Operaciones"; modified = true; }
+
+                var planeamientoUser = context.Usuarios.FirstOrDefault(u => u.Username == "planeamiento" && (u.Cargo == null || u.Cargo == ""));
+                if (planeamientoUser != null) { planeamientoUser.Cargo = "Jefe de Planeamiento"; modified = true; }
+
+                var lodosUser = context.Usuarios.FirstOrDefault(u => u.Username == "lodos" && (u.Cargo == null || u.Cargo == ""));
+                if (lodosUser != null) { lodosUser.Cargo = "Supervisor de Lodos"; modified = true; }
+
+                var rellenoUser = context.Usuarios.FirstOrDefault(u => u.Username == "relleno" && (u.Cargo == null || u.Cargo == ""));
+                if (rellenoUser != null) { rellenoUser.Cargo = "Operador de Relleno"; modified = true; }
+
+                var vigilanteUser = context.Usuarios.FirstOrDefault(u => u.Username == "vigilante" && (u.Cargo == null || u.Cargo == ""));
+                if (vigilanteUser != null) { vigilanteUser.Cargo = "Vigilante de Garita"; modified = true; }
+
+                var ssomaUser = context.Usuarios.FirstOrDefault(u => u.Username == "ssoma" && (u.Cargo == null || u.Cargo == ""));
+                if (ssomaUser != null) { ssomaUser.Cargo = "Inspector SSOMA"; modified = true; }
+
+                if (modified)
+                {
+                    context.SaveChanges();
+                }
+
+                // Auto-populate / fix Conductores
+                var existingConductores = context.Conductores.ToList();
+                if (existingConductores.Any())
+                {
+                    foreach (var c in existingConductores)
+                    {
+                        c.Activo = true;
+                        if (string.IsNullOrEmpty(c.TipoEquipoAutorizado))
+                        {
+                            c.TipoEquipoAutorizado = "Volquete, Excavadora, Camioneta";
+                        }
+                    }
+                    context.SaveChanges();
+                }
+                else
+                {
+                    var seedConductores = new List<Conductor>
+                    {
+                        new Conductor { Nombre = "Manuel", Apellido = "Pérez", Dni = "72819201", Licencia = "Q72819201", CategoriaLicencia = "A-IIIc", Telefono = "987654321", TipoEquipoAutorizado = "Volquete, Excavadora, Camioneta", Activo = true },
+                        new Conductor { Nombre = "Juan", Apellido = "Gómez", Dni = "71829304", Licencia = "Q71829304", CategoriaLicencia = "A-IIIb", Telefono = "987654322", TipoEquipoAutorizado = "Volquete, Cargador Frontal, Rodillo", Activo = true },
+                        new Conductor { Nombre = "Carlos", Apellido = "Mendoza", Dni = "70918273", Licencia = "Q70918273", CategoriaLicencia = "A-IIIc", Telefono = "987654323", TipoEquipoAutorizado = "Volquete, Tracto Oruga, Cisterna", Activo = true },
+                        new Conductor { Nombre = "Pedro", Apellido = "Castillo", Dni = "73645281", Licencia = "Q73645281", CategoriaLicencia = "A-IIb", Telefono = "987654324", TipoEquipoAutorizado = "Camioneta, Cisterna", Activo = true },
+                        new Conductor { Nombre = "Sofía", Apellido = "Estrada", Dni = "74536291", Licencia = "Q74536291", CategoriaLicencia = "A-IIIc", Telefono = "987654325", TipoEquipoAutorizado = "Volquete, Excavadora, Rodillo", Activo = true },
+                        new Conductor { Nombre = "Lucia", Apellido = "Rojas", Dni = "75423168", Licencia = "Q75423168", CategoriaLicencia = "A-IIIb", Telefono = "987654326", TipoEquipoAutorizado = "Volquete, Camioneta", Activo = true }
+                    };
+                    context.Conductores.AddRange(seedConductores);
+                    context.SaveChanges();
+                }
+
                 return;   // DB has been seeded
             }
 
@@ -163,13 +411,13 @@ namespace Sigecosem.WebApi.Data
 
             var usuarios = new List<Usuario>
             {
-                new Usuario { Username = "admin", PasswordHash = HashPassword("admin123"), Nombre = "Admin", Apellido = "Ecosem", RolId = adminRol.Id, AreaId = areas.First(a => a.Nombre == "Sistemas e Informática").Id },
-                new Usuario { Username = "gerente", PasswordHash = HashPassword("gerente123"), Nombre = "Carlos", Apellido = "Mendoza", RolId = gerenteRol.Id, AreaId = areas.First(a => a.Nombre == "Gerencia").Id },
-                new Usuario { Username = "planeamiento", PasswordHash = HashPassword("plan123"), Nombre = "Lucia", Apellido = "Rojas", RolId = planeamientoRol.Id, AreaId = areas.First(a => a.Nombre == "Planeamiento y Control").Id },
-                new Usuario { Username = "lodos", PasswordHash = HashPassword("lodos123"), Nombre = "Manuel", Apellido = "Pérez", RolId = lodosRol.Id, AreaId = areas.First(a => a.Nombre == "Área de Lodos").Id },
-                new Usuario { Username = "relleno", PasswordHash = HashPassword("relleno123"), Nombre = "Juan", Apellido = "Gómez", RolId = rellenoRol.Id, AreaId = areas.First(a => a.Nombre == "Relleno Sanitario").Id },
-                new Usuario { Username = "vigilante", PasswordHash = HashPassword("vigilante123"), Nombre = "Pedro", Apellido = "Castillo", RolId = vigilanteRol.Id, AreaId = areas.First(a => a.Nombre == "Vigilancia y Control").Id },
-                new Usuario { Username = "ssoma", PasswordHash = HashPassword("ssoma123"), Nombre = "Sofía", Apellido = "Estrada", RolId = ssomaRol.Id, AreaId = areas.First(a => a.Nombre == "SSOMA").Id }
+                new Usuario { Username = "admin", PasswordHash = HashPassword("admin123"), Nombre = "Admin", Apellido = "Ecosem", RolId = adminRol.Id, AreaId = areas.First(a => a.Nombre == "Sistemas e Informática").Id, Permisos = adminRol.Permisos, Cargo = "Administrador del Sistema" },
+                new Usuario { Username = "gerente", PasswordHash = HashPassword("gerente123"), Nombre = "Carlos", Apellido = "Mendoza", RolId = gerenteRol.Id, AreaId = areas.First(a => a.Nombre == "Gerencia").Id, Permisos = gerenteRol.Permisos, Cargo = "Gerente de Operaciones" },
+                new Usuario { Username = "planeamiento", PasswordHash = HashPassword("plan123"), Nombre = "Lucia", Apellido = "Rojas", RolId = planeamientoRol.Id, AreaId = areas.First(a => a.Nombre == "Planeamiento y Control").Id, Permisos = planeamientoRol.Permisos, Cargo = "Jefe de Planeamiento" },
+                new Usuario { Username = "lodos", PasswordHash = HashPassword("lodos123"), Nombre = "Manuel", Apellido = "Pérez", RolId = lodosRol.Id, AreaId = areas.First(a => a.Nombre == "Área de Lodos").Id, Permisos = lodosRol.Permisos, Cargo = "Supervisor de Lodos" },
+                new Usuario { Username = "relleno", PasswordHash = HashPassword("relleno123"), Nombre = "Juan", Apellido = "Gómez", RolId = rellenoRol.Id, AreaId = areas.First(a => a.Nombre == "Relleno Sanitario").Id, Permisos = rellenoRol.Permisos, Cargo = "Operador de Relleno" },
+                new Usuario { Username = "vigilante", PasswordHash = HashPassword("vigilante123"), Nombre = "Pedro", Apellido = "Castillo", RolId = vigilanteRol.Id, AreaId = areas.First(a => a.Nombre == "Vigilancia y Control").Id, Permisos = vigilanteRol.Permisos, Cargo = "Vigilante de Garita" },
+                new Usuario { Username = "ssoma", PasswordHash = HashPassword("ssoma123"), Nombre = "Sofía", Apellido = "Estrada", RolId = ssomaRol.Id, AreaId = areas.First(a => a.Nombre == "SSOMA").Id, Permisos = ssomaRol.Permisos, Cargo = "Inspector SSOMA" }
             };
             context.Usuarios.AddRange(usuarios);
             context.SaveChanges();

@@ -108,7 +108,10 @@ namespace Sigecosem.WebApi.Controllers
                     user.Apellido,
                     Rol = user.Rol?.Nombre,
                     Area = user.Area?.Nombre,
-                    Permisos = user.Rol?.Permisos.Split(',') ?? Array.Empty<string>()
+                    Permisos = (string.IsNullOrWhiteSpace(user.Permisos) ? (user.Rol?.Permisos ?? "") : user.Permisos)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(p => p.Trim())
+                        .ToArray()
                 }
             });
         }

@@ -187,16 +187,28 @@ function getCurrentLocation(): Promise<{ lat: number; lng: number } | null> {
 
 export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, user }) => {
   const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [conductores, setConductores] = useState<any[]>([]);
+  const [tiposEquipo, setTiposEquipo] = useState<string[]>([]);
+  
+  const [selectedTipo, setSelectedTipo] = useState('');
   const [selectedPlaca, setSelectedPlaca] = useState('');
+  const [selectedConductorId, setSelectedConductorId] = useState('');
+  const [selectedConductorNombre, setSelectedConductorNombre] = useState('');
+  
   const [combustible, setCombustible] = useState(50);
-  const [horometro, setHorometro] = useState('');
-  const [kmOdometro, setKmOdometro] = useState('');
+  const [horometroInicial, setHorometroInicial] = useState('');
+  const [horometroFinal, setHorometroFinal] = useState('');
+  const [kilometrajeInicial, setKilometrajeInicial] = useState('');
+  const [kilometrajeFinal, setKilometrajeFinal] = useState('');
+  const [servicioDescripcion, setServicioDescripcion] = useState('');
   const [observacionesGlobales, setObservacionesGlobales] = useState('');
-  const [conductorName, setConductorName] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [fechaHora] = useState(new Date().toLocaleString('es-PE'));
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(SECTIONS.map(s => s.id)));
+
+  const [isHorometroReadOnly, setIsHorometroReadOnly] = useState(false);
+  const [isKilometrajeReadOnly, setIsKilometrajeReadOnly] = useState(false);
 
   // Item states: map from itemId → { estado, observacion }
   const [itemsState, setItemsState] = useState<Record<string, { estado: EstadoItem; observacion: string }>>(
@@ -209,27 +221,29 @@ export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, 
   const [blockedItems, setBlockedItems] = useState<string[]>([]);
   const [showHelp, setShowHelp] = useState<string | null>(null);
 
-  // Signature canvas
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [hasFirma, setHasFirma] = useState(false);
-
   // Init
   useEffect(() => {
-    const fetchEquipos = async () => {
+    const fetchData = async () => {
       try {
-        const data = await api.getEquipos();
-        setEquipos(data.filter(e => e.estado !== 'Fuera de servicio'));
-        if (data.length > 0) setSelectedPlaca(data[0].placa);
-      } catch {
-        /* offline */
+        const [eqData, condData] = await Promise.all([
+          api.getEquipos().catch(() => []),
+          api.getConductoresTodos().catch(() => [])
+        ]);
+        const eq = Array.isArray(eqData) ? eqData.filter(e => e && e.estado !== 'Fuera de servicio') : [];
+        setEquipos(eq);
+        
+        const tipos = Array.from(new Set(eq.map(e => e.tipo).filter(Boolean)));
+        setTiposEquipo(tipos as string[]);
+        
+        setConductores(Array.isArray(condData) ? condData : []);
+      } catch (err) {
+        console.error('Error fetching data in checklist:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchEquipos();
+    fetchData();
     getCurrentLocation().then(setLocation);
-    if (user?.nombre) setConductorName(`${user.nombre} ${user.apellido ?? ''}`.trim());
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -241,16 +255,53 @@ export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, 
     };
   }, []);
 
-  // Canvas init
+  // Fetch last checklist for selected Placa to auto-fill & lock initial metrics
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-  }, [loading]);
+    if (!selectedPlaca) {
+      setHorometroInicial('');
+      setKilometrajeInicial('');
+      setIsHorometroReadOnly(false);
+      setIsKilometrajeReadOnly(false);
+      return;
+    }
+
+    const fetchLastChecklist = async () => {
+      try {
+        const checklists = await api.getCheckLists();
+        const plateChecklists = checklists
+          .filter((c: any) => c.equipoPlaca.toUpperCase() === selectedPlaca.toUpperCase())
+          .sort((a: any, b: any) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime());
+
+        if (plateChecklists.length > 0) {
+          const last = plateChecklists[0];
+          if (last.horometroFinal !== null && last.horometroFinal !== undefined) {
+            setHorometroInicial(last.horometroFinal.toString());
+            setIsHorometroReadOnly(true);
+          } else {
+            setHorometroInicial('');
+            setIsHorometroReadOnly(false);
+          }
+
+          if (last.kilometrajeFinal !== null && last.kilometrajeFinal !== undefined) {
+            setKilometrajeInicial(last.kilometrajeFinal.toString());
+            setIsKilometrajeReadOnly(true);
+          } else {
+            setKilometrajeInicial('');
+            setIsKilometrajeReadOnly(false);
+          }
+        } else {
+          setHorometroInicial('');
+          setKilometrajeInicial('');
+          setIsHorometroReadOnly(false);
+          setIsKilometrajeReadOnly(false);
+        }
+      } catch (err) {
+        console.error('Error fetching last checklist:', err);
+      }
+    };
+
+    fetchLastChecklist();
+  }, [selectedPlaca]);
 
   // Computed
   const criticalFailures = ALL_ITEMS.filter(
@@ -285,48 +336,16 @@ export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, 
     });
   };
 
-  // Signature
-  const getCanvasPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    if ('touches' in e) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
-  };
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    const { x, y } = getCanvasPos(e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    setIsDrawing(true);
-    e.preventDefault();
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    const { x, y } = getCanvasPos(e);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    setHasFirma(true);
-    e.preventDefault();
-  };
-
-  const stopDrawing = () => setIsDrawing(false);
-
-  const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
-    setHasFirma(false);
-  };
-
   // Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlaca) return alert('Seleccione un equipo.');
-    if (!conductorName) return alert('Ingrese el nombre del operador.');
+    if (!selectedConductorNombre.trim()) return alert('Ingrese el nombre del operador/conductor.');
+    if (!horometroFinal) return alert('Ingrese el horómetro final.');
+
+    // Find conductor ID by name if possible, or fallback to 1
+    const matchedCond = conductores.find(c => `${c.nombre} ${c.apellido}`.toLowerCase() === selectedConductorNombre.trim().toLowerCase());
+    const finalConductorId = matchedCond ? matchedCond.id : (parseInt(selectedConductorId) || 1);
 
     // Auto-block check
     if (criticalFailures.length > 0) {
@@ -343,29 +362,26 @@ export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, 
     setSubmitStatus(null);
 
     try {
-      const firmaBase64 = canvasRef.current?.toDataURL() ?? '';
       const checklistPayload = {
-        placa: selectedPlaca,
-        operadorNombre: conductorName,
-        fecha: new Date().toISOString(),
-        ubicacionLat: location?.lat ?? null,
-        ubicacionLng: location?.lng ?? null,
-        combustiblePct: combustible,
-        horometroActual: horometro ? parseFloat(horometro) : null,
-        kmOdometro: kmOdometro ? parseFloat(kmOdometro) : null,
-        items: ALL_ITEMS.map(item => ({
+        equipoPlaca: selectedPlaca,
+        conductorId: finalConductorId,
+        servicio: servicioDescripcion,
+        combustibleNivel: combustible,
+        horometroInicial: horometroInicial ? parseFloat(horometroInicial) : null,
+        horometroFinal: horometroFinal ? parseFloat(horometroFinal) : null,
+        kilometrajeInicial: kilometrajeInicial ? parseFloat(kilometrajeInicial) : null,
+        kilometrajeFinal: kilometrajeFinal ? parseFloat(kilometrajeFinal) : null,
+        observaciones: observacionesGlobales,
+        tieneFallasCriticas: criticalFailures.length > 0,
+        itemsJson: JSON.stringify(ALL_ITEMS.map(item => ({
           itemId: item.id,
           label: item.label,
           section: SECTIONS.find(s => s.items.find(i => i.id === item.id))?.title ?? '',
           critical: item.critical,
           estado: itemsState[item.id]?.estado ?? 'OK',
           observacion: itemsState[item.id]?.observacion ?? '',
-        })),
-        firmaBase64,
-        observacionesGlobales,
-        resultadoGlobal: overallStatus,
-        fallasCount: criticalFailures.length,
-        advertenciasCount: warnings.length,
+        }))),
+        firmaOperador: '',
       };
 
       if (isOnline) {
@@ -388,18 +404,17 @@ export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, 
             : `✅ Checklist registrado exitosamente. Equipo ${selectedPlaca} APROBADO para operación.`
         });
       } else {
+        // @ts-ignore
         await offlineStorage.saveChecklist(checklistPayload);
         setSubmitStatus({
           type: 'success',
           message: '📴 Sin conexión. Checklist guardado localmente. Se sincronizará al recuperar señal.'
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      try {
-        await offlineStorage.saveChecklist({ placa: selectedPlaca, error: String(err) });
-      } catch {}
-      setSubmitStatus({ type: 'error', message: 'Error al enviar. Se guardó copia offline.' });
+      const errMsg = err?.message || 'Error al enviar. Intente de nuevo.';
+      setSubmitStatus({ type: 'error', message: errMsg });
     } finally {
       setSubmitting(false);
     }
@@ -495,41 +510,120 @@ export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, 
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Datos de la Inspección</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Equipo / Placa <span className="text-rose-500">*</span></label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tipo de Equipo</label>
               <select
-                value={selectedPlaca}
-                onChange={e => setSelectedPlaca(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                value={selectedTipo}
+                onChange={e => { setSelectedTipo(e.target.value); setSelectedPlaca(''); }}
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all"
               >
-                <option value="">— Seleccione —</option>
-                {equipos.map(e => (
-                  <option key={e.placa} value={e.placa}>{e.placa} — {e.descripcion}</option>
+                <option value="">— Todos —</option>
+                {tiposEquipo.map(t => (
+                  <option key={t} value={t}>{t}</option>
                 ))}
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Operador / Conductor <span className="text-rose-500">*</span></label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Equipo / Placa <span className="text-rose-500">*</span></label>
               <input
-                value={conductorName}
-                onChange={e => setConductorName(e.target.value)}
-                placeholder="Nombre completo..."
+                type="text"
+                list="checklist-equipos-list"
+                value={selectedPlaca}
+                onChange={e => setSelectedPlaca(e.target.value.toUpperCase())}
+                placeholder="Escriba o seleccione placa (e.g. CDQ-747)"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-bold uppercase transition-all"
+                required
+              />
+              <datalist id="checklist-equipos-list">
+                {equipos
+                  .filter(e => !selectedTipo || e.tipo === selectedTipo)
+                  .map(e => (
+                    <option key={e.placa} value={e.placa}>{e.placa} — {e.codigoInterno} ({e.tipo})</option>
+                  ))}
+              </datalist>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Conductor / Operador <span className="text-rose-500">*</span></label>
+              <input
+                type="text"
+                list="checklist-conductores-list"
+                value={selectedConductorNombre}
+                onChange={e => setSelectedConductorNombre(e.target.value)}
+                placeholder="Escriba o seleccione nombre del conductor"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-bold transition-all"
+                required
+              />
+              <datalist id="checklist-conductores-list">
+                {conductores.map(c => (
+                  <option key={c.id} value={`${c.nombre} ${c.apellido}`}>{c.apellido}, {c.nombre} (DNI: {c.dni})</option>
+                ))}
+              </datalist>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Servicio Destinado</label>
+              <input
+                type="text"
+                value={servicioDescripcion}
+                onChange={e => setServicioDescripcion(e.target.value)}
+                placeholder="Ej. Carguío de mineral..."
                 className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fecha y Hora</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fecha y Hora de Inicio</label>
               <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-500">
                 <Clock className="h-4 w-4" />
                 {fechaHora}
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Horómetro Actual (hrs)</label>
-              <input type="number" min={0} step={0.1} value={horometro} onChange={e => setHorometro(e.target.value)} placeholder="Ej. 4521.5" className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" />
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Km Inicial</label>
+              <input
+                type="number"
+                min={0}
+                value={kilometrajeInicial}
+                onChange={e => setKilometrajeInicial(e.target.value)}
+                readOnly={isKilometrajeReadOnly}
+                placeholder="Ej. 87432"
+                className={`w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all ${isKilometrajeReadOnly ? 'bg-slate-100 dark:bg-slate-900 cursor-not-allowed opacity-75 font-semibold text-slate-500' : ''}`}
+              />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Km Odómetro (si aplica)</label>
-              <input type="number" min={0} value={kmOdometro} onChange={e => setKmOdometro(e.target.value)} placeholder="Ej. 87432" className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all" />
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Km Final <span className="text-rose-500">*</span></label>
+              <input
+                type="number"
+                min={0}
+                value={kilometrajeFinal}
+                onChange={e => setKilometrajeFinal(e.target.value)}
+                placeholder="Ej. 87450"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hr Inicial</label>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={horometroInicial}
+                onChange={e => setHorometroInicial(e.target.value)}
+                readOnly={isHorometroReadOnly}
+                placeholder="Ej. 4521.5"
+                className={`w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all ${isHorometroReadOnly ? 'bg-slate-100 dark:bg-slate-900 cursor-not-allowed opacity-75 font-semibold text-slate-500' : ''}`}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hr Final <span className="text-rose-500">*</span></label>
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={horometroFinal}
+                onChange={e => setHorometroFinal(e.target.value)}
+                placeholder="Ej. 4528.0"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all"
+                required
+              />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -686,28 +780,7 @@ export const CheckListDigital: React.FC<CheckListDigitalProps> = ({ onNavigate, 
           />
         </div>
 
-        {/* Firma Digital */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <PenTool className="h-4 w-4 text-slate-400" />
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Firma Digital del Operador</label>
-            </div>
-            <div className="flex items-center gap-3">
-              {hasFirma && <span className="text-[10px] text-emerald-500 font-bold">✓ Firmado</span>}
-              <button type="button" onClick={clearCanvas} className="text-xs text-rose-500 hover:underline font-semibold">Limpiar</button>
-            </div>
-          </div>
-          <canvas
-            ref={canvasRef}
-            width={700}
-            height={120}
-            onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
-            onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
-            className="w-full border border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 cursor-crosshair"
-          />
-          <p className="text-[10px] text-slate-400 mt-1">Al firmar, el operador declara haber inspeccionado el equipo y es responsable de la información consignada.</p>
-        </div>
+
 
         {/* Summary Card */}
         <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">

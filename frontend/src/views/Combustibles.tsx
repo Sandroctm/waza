@@ -6,6 +6,7 @@ import { Fuel, RefreshCw, PlusCircle, CheckCircle, AlertCircle } from 'lucide-re
 export const Combustibles: React.FC = () => {
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [logs, setLogs] = useState<Combustible[]>([]);
+  const [conductores, setConductores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form
@@ -15,17 +16,31 @@ export const Combustibles: React.FC = () => {
   const [galones, setGalones] = useState(0);
   const [precio, setPrecio] = useState(16.5);
   const [horometro, setHorometro] = useState(0);
+  const [conductorId, setConductorId] = useState('');
+  const [conductorNombre, setConductorNombre] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
 
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const fetchData = async () => {
     try {
-      const eqData = await api.getEquipos();
-      const fuelLogs = await api.getCombustibles();
+      const rawEq = await api.getEquipos().catch(() => []);
+      const eqData = Array.isArray(rawEq) ? rawEq : [];
+      
+      const rawFuel = await api.getCombustibles().catch(() => []);
+      const fuelLogs = Array.isArray(rawFuel) ? rawFuel : [];
+
+      const rawCond = await api.getConductores().catch(() => []);
+      const condData = Array.isArray(rawCond) ? rawCond : [];
+      setConductores(condData);
+      if (condData.length > 0) {
+        setConductorId(condData[0].id.toString());
+        setConductorNombre(`${condData[0].nombre} ${condData[0].apellido}`);
+      }
+      
       setEquipos(eqData);
       setLogs(fuelLogs);
-      if (eqData.length > 0) setPlaca(eqData[0].placa);
+      if (eqData.length > 0) setPlaca(eqData[0].placa || '');
     } catch (err) {
       console.error('Error fetching fuels data:', err);
     } finally {
@@ -46,6 +61,9 @@ export const Combustibles: React.FC = () => {
       return;
     }
 
+    const matched = conductores.find(c => `${c.nombre} ${c.apellido}`.toLowerCase() === conductorNombre.trim().toLowerCase());
+    const finalCondId = matched ? matched.id : (parseInt(conductorId) || 1);
+
     const payload = {
       equipoPlaca: placa,
       proveedor,
@@ -54,7 +72,8 @@ export const Combustibles: React.FC = () => {
       precioGalon: precio,
       horometroVal: horometro,
       fecha,
-      operadorId: 1 // Seed Admin or Operator id
+      operadorId: 1, // Seed Admin or Operator id
+      conductorId: finalCondId
     };
 
     try {
@@ -118,19 +137,43 @@ export const Combustibles: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold">
             <div>
-              <label className="block text-slate-400 uppercase tracking-wider mb-1">Equipo</label>
-              <select
+              <label className="block text-slate-400 uppercase tracking-wider mb-1">Equipo (Placa)</label>
+              <input
+                type="text"
+                list="combustibles-equipos-list"
                 value={placa}
-                onChange={(e) => setPlaca(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-white"
+                onChange={(e) => setPlaca(e.target.value.toUpperCase())}
+                placeholder="Escriba o seleccione placa"
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-white font-bold uppercase"
                 required
-              >
+              />
+              <datalist id="combustibles-equipos-list">
                 {equipos.map((eq) => (
                   <option key={eq.placa} value={eq.placa}>
-                    {eq.placa} ({eq.codigoInterno})
+                    {eq.placa} ({eq.codigoInterno} - {eq.tipo})
                   </option>
                 ))}
-              </select>
+              </datalist>
+            </div>
+
+            <div>
+              <label className="block text-slate-400 uppercase tracking-wider mb-1">Conductor / Operario</label>
+              <input
+                type="text"
+                list="combustibles-conductores-list"
+                value={conductorNombre}
+                onChange={(e) => setConductorNombre(e.target.value)}
+                placeholder="Escriba o seleccione conductor"
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-white font-bold"
+                required
+              />
+              <datalist id="combustibles-conductores-list">
+                {conductores.map((c) => (
+                  <option key={c.id} value={`${c.nombre} ${c.apellido}`}>
+                    {c.nombre} {c.apellido}
+                  </option>
+                ))}
+              </datalist>
             </div>
 
             <div>
@@ -233,8 +276,10 @@ export const Combustibles: React.FC = () => {
                   <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 uppercase text-[9px]">
                     <th className="py-2.5">Fecha</th>
                     <th className="py-2.5">Equipo</th>
+                    <th className="py-2.5">Conductor</th>
                     <th className="py-2.5">Estación / Grifo</th>
                     <th className="py-2.5">Galones</th>
+                    <th className="py-2.5">Precio x Galón</th>
                     <th className="py-2.5">Total Costo</th>
                     <th className="py-2.5">Horómetro</th>
                   </tr>
@@ -244,8 +289,10 @@ export const Combustibles: React.FC = () => {
                     <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
                       <td className="py-2">{new Date(c.fecha).toLocaleDateString()}</td>
                       <td className="py-2 font-bold text-slate-900 dark:text-white">{c.equipoPlaca}</td>
+                      <td className="py-2">{c.conductor ? `${c.conductor.nombre} ${c.conductor.apellido}` : '—'}</td>
                       <td className="py-2">{c.proveedor} ({c.grifo})</td>
                       <td className="py-2">{c.galones} G</td>
+                      <td className="py-2 font-mono">S/. {c.precioGalon?.toFixed(2) || '16.50'}</td>
                       <td className="py-2 text-emerald-600 dark:text-emerald-400">S/. {c.costoTotal.toLocaleString()}</td>
                       <td className="py-2 font-mono">{c.horometroVal}</td>
                     </tr>

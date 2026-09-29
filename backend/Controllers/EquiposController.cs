@@ -75,6 +75,36 @@ namespace Sigecosem.WebApi.Controllers
             return Ok(new { total, disponible, operativo, mantenimientoPrev, mantenimientoCorr, bloqueado, fueraServicio });
         }
 
+        // ===== PROYECTOS (must be BEFORE {placa} route) =====
+
+        [HttpGet("proyectos")]
+        public IActionResult GetProyectos()
+        {
+            var proyectos = _context.Proyectos.Where(p => p.Activo).OrderBy(p => p.Nombre).ToList();
+            return Ok(proyectos);
+        }
+
+        [HttpPost("proyectos")]
+        public IActionResult CreateProyecto([FromBody] Proyecto proyecto)
+        {
+            if (string.IsNullOrWhiteSpace(proyecto.Nombre))
+                return BadRequest(new { message = "El nombre del proyecto es requerido." });
+
+            var existing = _context.Proyectos.FirstOrDefault(p => p.Nombre.ToLower() == proyecto.Nombre.ToLower());
+            if (existing != null)
+            {
+                if (!existing.Activo) { existing.Activo = true; _context.SaveChanges(); }
+                return Ok(existing);
+            }
+
+            proyecto.Activo = true;
+            _context.Proyectos.Add(proyecto);
+            _context.SaveChanges();
+
+            Audit("Crear Proyecto", $"Proyecto creado: {proyecto.Nombre}");
+            return Ok(proyecto);
+        }
+
         [HttpGet("{placa}")]
         public IActionResult GetByPlaca(string placa)
         {
@@ -168,6 +198,29 @@ namespace Sigecosem.WebApi.Controllers
 
             _context.SaveChanges();
 
+            // Store in Excel database replica
+            try
+            {
+                Sigecosem.WebApi.Helpers.ExcelDbHelper.AppendEquipo(
+                    equipo.Placa,
+                    equipo.CodigoInterno,
+                    equipo.Tipo,
+                    equipo.Marca,
+                    equipo.Modelo,
+                    equipo.Serie,
+                    equipo.Motor,
+                    equipo.Chasis,
+                    equipo.Color,
+                    equipo.Estado,
+                    equipo.AnioFabricacion,
+                    equipo.Valor
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Failed to append equipment to excel: " + ex.Message);
+            }
+
             Audit("Crear Equipo", $"Equipo registrado Placa: {equipo.Placa}, Código: {equipo.CodigoInterno}");
             return CreatedAtAction(nameof(GetByPlaca), new { placa = equipo.Placa }, equipo);
         }
@@ -194,6 +247,10 @@ namespace Sigecosem.WebApi.Controllers
             equipo.Seguro = equipoInput.Seguro;
             equipo.SOATVencimiento = equipoInput.SOATVencimiento;
             equipo.RevisionTecnicaVencimiento = equipoInput.RevisionTecnicaVencimiento;
+            equipo.PermisoCirculacionVencimiento = equipoInput.PermisoCirculacionVencimiento;
+            equipo.PolizaVencimiento = equipoInput.PolizaVencimiento;
+            equipo.AnioFabricacion = equipoInput.AnioFabricacion;
+            equipo.Valor = equipoInput.Valor;
             equipo.FotoUrl = equipoInput.FotoUrl;
 
             _context.SaveChanges();
@@ -285,6 +342,105 @@ namespace Sigecosem.WebApi.Controllers
 
             Audit("Eliminar Equipo", $"Equipo eliminado Placa: {placa}");
             return Ok(new { message = "Equipo eliminado exitosamente." });
+        }
+
+        // ===== DOCUMENTOS POR EQUIPO =====
+
+        [HttpGet("{placa}/documentos")]
+        public IActionResult GetDocumentos(string placa)
+        {
+            var docs = _context.Documentos
+                .Where(d => d.EquipoPlaca.ToUpper() == placa.ToUpper())
+                .OrderByDescending(d => d.FechaSubida)
+                .ToList();
+            return Ok(docs);
+        }
+
+        [HttpPost("{placa}/documentos")]
+        public IActionResult CreateDocumento(string placa, [FromBody] Documento documento)
+        {
+            var equipo = _context.Equipos.FirstOrDefault(e => e.Placa.ToUpper() == placa.ToUpper());
+            if (equipo == null) return NotFound(new { message = "Equipo no encontrado" });
+
+            documento.EquipoPlaca = placa.ToUpper();
+            documento.FechaSubida = DateTime.UtcNow;
+            _context.Documentos.Add(documento);
+
+            // Si es SOAT, actualizar la fecha en el equipo
+            if (documento.Tipo?.ToLower() == "soat" && documento.FechaVencimiento.HasValue)
+            {
+                equipo.SOATVencimiento = documento.FechaVencimiento.Value;
+            }
+            else if (documento.Tipo?.ToLower().Contains("revision") == true && documento.FechaVencimiento.HasValue)
+            {
+                equipo.RevisionTecnicaVencimiento = documento.FechaVencimiento.Value;
+            }
+
+            _context.SaveChanges();
+            Audit("Subir Documento", $"Documento '{documento.Nombre}' ({documento.Tipo}) agregado al equipo {placa}");
+            return Ok(documento);
+        }
+
+        [HttpDelete("{placa}/documentos/{id}")]
+        public IActionResult DeleteDocumento(string placa, int id)
+        {
+            var doc = _context.Documentos.FirstOrDefault(d => d.Id == id && d.EquipoPlaca.ToUpper() == placa.ToUpper());
+            if (doc == null) return NotFound(new { message = "Documento no encontrado" });
+
+            _context.Documentos.Remove(doc);
+            _context.SaveChanges();
+            Audit("Eliminar Documento", $"Documento id={id} eliminado del equipo {placa}");
+            return Ok(new { message = "Documento eliminado." });
+        }
+
+        [HttpPost("{placa}/documentos/upload")]
+        public async Task<IActionResult> UploadDocumento(string placa, [FromForm] IFormFile file, [FromForm] string nombre, [FromForm] string tipo, [FromForm] DateTime? fechaVencimiento)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "Archivo no proporcionado" });
+
+            var equipo = _context.Equipos.FirstOrDefault(e => e.Placa.ToUpper() == placa.ToUpper());
+            if (equipo == null) return NotFound(new { message = "Equipo no encontrado" });
+
+            var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "documentos", placa);
+            if (!Directory.Exists(uploadsFolder))
+                Directory.CreateDirectory(uploadsFolder);
+
+            var fileName = $"{Guid.NewGuid()}_{file.FileName}";
+            var filePath = Path.Combine(uploadsFolder, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var url = $"/uploads/documentos/{placa}/{fileName}";
+
+            var documento = new Documento
+            {
+                EquipoPlaca = placa.ToUpper(),
+                Nombre = nombre,
+                Tipo = tipo,
+                Url = url,
+                FechaVencimiento = fechaVencimiento,
+                FechaSubida = DateTime.UtcNow
+            };
+
+            _context.Documentos.Add(documento);
+
+            if (tipo?.ToLower() == "soat" && fechaVencimiento.HasValue)
+                equipo.SOATVencimiento = fechaVencimiento.Value;
+            else if (tipo?.ToLower().Contains("revision") == true && fechaVencimiento.HasValue)
+                equipo.RevisionTecnicaVencimiento = fechaVencimiento.Value;
+            else if (tipo?.ToLower().Contains("poliza") == true && fechaVencimiento.HasValue)
+                equipo.PolizaVencimiento = fechaVencimiento.Value;
+            else if (tipo?.ToLower().Contains("circulacion") == true && fechaVencimiento.HasValue)
+                equipo.PermisoCirculacionVencimiento = fechaVencimiento.Value;
+
+            _context.SaveChanges();
+            Audit("Subir Documento", $"Documento PDF '{nombre}' ({tipo}) subido al equipo {placa}");
+
+            return Ok(documento);
         }
     }
 }

@@ -23,6 +23,8 @@ namespace Sigecosem.WebApi.Data
         public DbSet<Alerta> Alertas { get; set; } = null!;
         public DbSet<GpsData> GpsDatas { get; set; } = null!;
         public DbSet<AuditoriaLog> AuditoriaLogs { get; set; } = null!;
+        public DbSet<Conductor> Conductores { get; set; } = null!;
+        public DbSet<ReporteTonelada> ReportesTonelada { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -66,6 +68,24 @@ namespace Sigecosem.WebApi.Data
                 .WithMany()
                 .HasForeignKey(c => c.EquipoPlaca)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<CheckList>()
+                .HasOne(c => c.Conductor)
+                .WithMany()
+                .HasForeignKey(c => c.ConductorId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Combustible>()
+                .HasOne(c => c.Conductor)
+                .WithMany()
+                .HasForeignKey(c => c.ConductorId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Tareo>()
+                .HasOne(t => t.Conductor)
+                .WithMany()
+                .HasForeignKey(t => t.ConductorId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<Tareo>()
                 .HasOne(t => t.Equipo)
