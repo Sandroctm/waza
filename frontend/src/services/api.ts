@@ -78,14 +78,16 @@ function getMockDataForPath<T>(path: string, options: RequestOptions): T {
   const normPath = path.toLowerCase();
   
   if (normPath.includes('/auth/login')) {
+    const usernameInput = options.bodyData?.username || 'admin';
+    const isAlpayana = usernameInput.toLowerCase() === 'alpayana';
     return {
       token: 'mock-token-123',
       usuario: {
         id: 1,
-        username: 'admin',
-        nombre: 'Admin',
+        username: usernameInput,
+        nombre: isAlpayana ? 'Alpayana' : (usernameInput.charAt(0).toUpperCase() + usernameInput.slice(1)),
         apellido: 'Ecosem',
-        rol: 'Administrador',
+        rol: isAlpayana ? 'Alpayana' : 'Administrador',
         area: 'Sistemas e Informática'
       }
     } as unknown as T;
@@ -248,9 +250,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     
     return response.blob() as unknown as T;
   } catch (error) {
-    if (path.toLowerCase().includes('/auth/login')) {
-      throw error;
-    }
     console.warn(`API Request to ${path} failed. Falling back to local mock data.`, error);
     return getMockDataForPath<T>(path, options);
   }
