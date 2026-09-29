@@ -17,12 +17,14 @@ import { EstructuraOrganica } from './views/EstructuraOrganica';
 import { DriverManagement } from './views/DriverManagement';
 import { Tareos } from './views/Tareos';
 import { ThemeToggle } from './components/ThemeToggle';
+import { AiAssistant } from './components/AiAssistant';
+import { CommandPalette } from './components/CommandPalette';
 import { signalRService } from './services/signalr';
 import { api } from './services/api';
 import { 
   Shield, Truck, CheckSquare, Calendar, Fuel, Wrench, ShieldAlert, 
   History, Settings, Eye, Menu, X, LogOut, Bell, User, LayoutDashboard,
-  Folder, ShieldCheck, Network
+  Folder, ShieldCheck, Network, Search
 } from 'lucide-react';
 
 type ViewType = 
@@ -56,6 +58,7 @@ export const App: React.FC = () => {
   // Real-time alerts notification count
   const [alerts, setAlerts] = useState<any[]>([]);
   const [showAlertsDropdown, setShowAlertsDropdown] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -286,9 +289,24 @@ export const App: React.FC = () => {
           
           {/* Top Navbar */}
           <header className="hidden md:flex items-center justify-between py-4 px-8 bg-white/40 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-900 relative z-10">
-            <div>
-              <span className="text-xs text-slate-400 uppercase tracking-widest font-extrabold">Ecosem Heavy Machinery</span>
-              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">Sede Principal - Operación Minera</h2>
+            <div className="flex items-center gap-6">
+              <div>
+                <span className="text-xs text-slate-400 uppercase tracking-widest font-extrabold">Ecosem Heavy Machinery</span>
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <span>Sede Principal - Operación Minera</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Sistema en línea" />
+                </h2>
+              </div>
+
+              {/* Global Command Palette trigger */}
+              <button
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="hidden lg:flex items-center gap-3 px-4 py-2 bg-slate-100/80 dark:bg-slate-900/80 hover:bg-slate-200/80 dark:hover:bg-slate-800/80 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl text-xs text-slate-400 transition-all font-medium shadow-sm hover:scale-[1.01]"
+              >
+                <Search className="h-4 w-4 text-emerald-500" />
+                <span>Buscar equipos (EGS-123), módulos...</span>
+                <kbd className="px-2 py-0.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg font-mono text-[10px] text-slate-500 font-bold shadow-xs">Ctrl K</kbd>
+              </button>
             </div>
 
             <div className="flex items-center gap-4">
@@ -415,6 +433,12 @@ export const App: React.FC = () => {
         </div>
 
         {/* Global Floating Components */}
+        <AiAssistant />
+        <CommandPalette 
+          isOpen={isCommandPaletteOpen} 
+          onClose={() => setIsCommandPaletteOpen(false)} 
+          onNavigate={navigateTo} 
+        />
 
       </div>
 

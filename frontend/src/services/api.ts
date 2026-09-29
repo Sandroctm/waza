@@ -201,6 +201,23 @@ function getMockDataForPath<T>(path: string, options: RequestOptions): T {
     ] as unknown as T;
   }
 
+  if (normPath.includes('/ai/chat')) {
+    const msg = (options.bodyData?.message || '').toLowerCase();
+    let reply = "Como asistente inteligente de SIGECOSEM ERP, puedo ayudarte a revisar el estado de la flota, validar normativas SSOMA, monitorear pesaje de toneladas, tareos y mantenimientos. ¿En qué área o equipo necesitas información?";
+    
+    if (msg.includes('equipo') || msg.includes('flota') || msg.includes('volquete') || msg.includes('placa')) {
+      reply = "🚜 **Estado de Flota Ecosem:** Contamos con equipos registrados (Volquetes EGS-123 y EGS-456, Excavadora EXC-789, Retroexcavadora RET-101). La unidad EXC-789 está observada por SSOMA para revisión de seguridad.";
+    } else if (msg.includes('tonelada') || msg.includes('pesaje') || msg.includes('balanza')) {
+      reply = "⚖️ **Reporte de Tonelaje:** El registro más reciente en Balanza Pucará indica 30.30 TN de mineral transportado en la ruta MTIC - C. 6.";
+    } else if (msg.includes('ssoma') || msg.includes('seguridad') || msg.includes('checklist')) {
+      reply = "🛡️ **Portal SSOMA & Checklist:** Recuerda completar el formato F-CHK-006 de 60 puntos críticos antes del inicio de turno. Los bloqueos SSOMA se liberan únicamente con V°B° del supervisor.";
+    } else if (msg.includes('mantenimiento') || msg.includes('taller')) {
+      reply = "🔧 **Mantenimientos:** La unidad CAR-202 se encuentra en mantenimiento preventivo. Puedes revisar el cronograma en el módulo de Mantenimientos.";
+    }
+
+    return { reply } as unknown as T;
+  }
+
   if (normPath.includes('/conductores')) {
     return [] as unknown as T;
   }
